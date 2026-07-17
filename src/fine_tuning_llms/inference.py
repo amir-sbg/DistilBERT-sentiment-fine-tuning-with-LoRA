@@ -9,15 +9,19 @@ from peft import AutoPeftModelForSequenceClassification
 from transformers import PreTrainedTokenizerBase, AutoTokenizer
 
 
+def _auto_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def load_adapter(
     adapter_dir: Path,
     device: str = "auto",
 ) -> tuple[AutoPeftModelForSequenceClassification, PreTrainedTokenizerBase, torch.device]:
-    selected_device = torch.device(
-        "cuda" if device == "auto" and torch.cuda.is_available() else device
-    )
-    if device == "auto" and not torch.cuda.is_available():
-        selected_device = torch.device("cpu")
+    selected_device = _auto_device() if device == "auto" else torch.device(device)
     tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
     model = AutoPeftModelForSequenceClassification.from_pretrained(adapter_dir)
     model.to(selected_device)
