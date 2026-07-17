@@ -33,5 +33,6 @@ def build_lora_model(
         lora_dropout=lora_dropout,
         bias="none",
         target_modules=["q_lin", "v_lin"],
+        modules_to_save=["pre_classifier", "classifier"],
     )
     return get_peft_model(base_model, lora_config)
