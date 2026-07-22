@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 from peft import AutoPeftModelForSequenceClassification
-from transformers import PreTrainedTokenizerBase, AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 
 def _auto_device() -> torch.device:
@@ -36,6 +36,13 @@ def predict(
     device: torch.device,
     max_length: int = 256,
 ) -> list[dict[str, str | float]]:
+    if not texts:
+        raise ValueError("at least one text is required")
+    if any(not text.strip() for text in texts):
+        raise ValueError("texts must not be empty")
+    if max_length < 1:
+        raise ValueError("max_length must be at least 1")
+
     encoded = tokenizer(
         texts,
         max_length=max_length,
@@ -49,10 +56,11 @@ def predict(
     confidence = probabilities.max(dim=-1).values.cpu().tolist()
     return [
         {
+            "text": text,
             "label": "positive" if label == 1 else "negative",
             "confidence": float(score),
         }
-        for label, score in zip(predictions, confidence)
+        for text, label, score in zip(texts, predictions, confidence)
     ]
 
 

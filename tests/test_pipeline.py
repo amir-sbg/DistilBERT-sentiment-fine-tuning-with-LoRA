@@ -8,6 +8,7 @@ from transformers import EvalPrediction
 from fine_tuning_llms.config import FineTuneConfig
 from fine_tuning_llms.data import tokenize_dataset, validate_dataset
 from fine_tuning_llms.evaluate import classification_metrics
+from fine_tuning_llms.inference import predict
 
 
 class TinyTokenizer:
@@ -58,3 +59,8 @@ def test_classification_metrics_are_consistent() -> None:
 def test_fine_tuning_config_rejects_invalid_values() -> None:
     with pytest.raises(ValueError, match="learning_rate"):
         FineTuneConfig(learning_rate=0)
+
+
+def test_inference_rejects_empty_text() -> None:
+    with pytest.raises(ValueError, match="at least one text"):
+        predict([], model=None, tokenizer=None, device=None)
