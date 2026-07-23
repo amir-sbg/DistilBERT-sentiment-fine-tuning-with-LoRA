@@ -19,6 +19,7 @@ def build_lora_model(
     lora_rank: int,
     lora_alpha: int,
     lora_dropout: float,
+    target_modules: tuple[str, ...] = ("q_lin", "v_lin"),
 ) -> PreTrainedModel:
     if num_labels < 2:
         raise ValueError("num_labels must be at least 2")
@@ -32,7 +33,7 @@ def build_lora_model(
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
         bias="none",
-        target_modules=["q_lin", "v_lin"],
+        target_modules=list(target_modules),
         modules_to_save=["pre_classifier", "classifier"],
     )
     return get_peft_model(base_model, lora_config)

@@ -61,6 +61,11 @@ def test_fine_tuning_config_rejects_invalid_values() -> None:
         FineTuneConfig(learning_rate=0)
 
 
+def test_fine_tuning_config_accepts_custom_lora_targets() -> None:
+    config = FineTuneConfig(lora_target_modules=("q_lin",))
+    assert config.lora_target_modules == ("q_lin",)
+
+
 def test_inference_rejects_empty_text() -> None:
     with pytest.raises(ValueError, match="at least one text"):
         predict([], model=None, tokenizer=None, device=None)

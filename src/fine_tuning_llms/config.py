@@ -23,6 +23,7 @@ class FineTuneConfig:
     lora_rank: int = 8
     lora_alpha: int = 16
     lora_dropout: float = 0.10
+    lora_target_modules: tuple[str, ...] = ("q_lin", "v_lin")
     seed: int = 42
     max_train_samples: int | None = None
     max_validation_samples: int | None = None
@@ -51,6 +52,11 @@ class FineTuneConfig:
             raise ValueError("LoRA rank and alpha must be at least 1")
         if not 0 <= self.lora_dropout < 1:
             raise ValueError("lora_dropout must be between 0 and 1")
+        if not self.lora_target_modules or any(
+            not isinstance(module, str) or not module.strip()
+            for module in self.lora_target_modules
+        ):
+            raise ValueError("lora_target_modules must contain at least one name")
 
 
 def ensure_output_directories(config: FineTuneConfig) -> None:

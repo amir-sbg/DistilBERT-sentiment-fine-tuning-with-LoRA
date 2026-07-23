@@ -48,6 +48,7 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         lora_rank=config.lora_rank,
         lora_alpha=config.lora_alpha,
         lora_dropout=config.lora_dropout,
+        target_modules=config.lora_target_modules,
     )
     trainer = fine_tune(
         model=model,
@@ -94,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=16)
     parser.add_argument("--lora-dropout", type=float, default=0.10)
+    parser.add_argument("--lora-target-modules", nargs="+", default=["q_lin", "v_lin"])
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-train-samples", type=int)
     parser.add_argument("--max-validation-samples", type=int)
@@ -102,7 +104,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def config_from_args(args: argparse.Namespace) -> FineTuneConfig:
-    return FineTuneConfig(**vars(args))
+    values = vars(args).copy()
+    values["lora_target_modules"] = tuple(values["lora_target_modules"])
+    return FineTuneConfig(**values)
 
 
 if __name__ == "__main__":
