@@ -38,8 +38,8 @@ The test report includes loss, accuracy, precision, recall, F1, runtime, and thr
 ## Installation
 
 ```bash
-git clone https://github.com/amir-sbg/fine-tuning-LLMs.git
-cd fine-tuning-LLMs
+git clone https://github.com/amir-sbg/DistilBERT-sentiment-fine-tuning-with-LoRA.git
+cd DistilBERT-sentiment-fine-tuning-with-LoRA
 
 python -m venv .venv
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
