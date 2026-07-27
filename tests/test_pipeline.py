@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
+import torch
 from datasets import Dataset, DatasetDict
 from transformers import EvalPrediction
 
@@ -18,6 +21,24 @@ class TinyTokenizer:
             "input_ids": [tokens or [0] for tokens in input_ids],
             "attention_mask": [[1] * max(len(tokens), 1) for tokens in input_ids],
         }
+
+
+class TinyBatch(dict):
+    def to(self, device):
+        return self
+
+
+class InferenceTokenizer:
+    def __call__(self, texts, **kwargs):
+        return TinyBatch(
+            input_ids=torch.ones((len(texts), 2), dtype=torch.long),
+            attention_mask=torch.ones((len(texts), 2), dtype=torch.long),
+        )
+
+
+class InferenceModel:
+    def __call__(self, **kwargs):
+        return SimpleNamespace(logits=torch.tensor([[2.0, 1.0], [1.0, 3.0]]))
 
 
 def tiny_dataset() -> DatasetDict:
@@ -69,3 +90,15 @@ def test_fine_tuning_config_accepts_custom_lora_targets() -> None:
 def test_inference_rejects_empty_text() -> None:
     with pytest.raises(ValueError, match="at least one text"):
         predict([], model=None, tokenizer=None, device=None)
+
+
+def test_inference_returns_positive_probability() -> None:
+    predictions = predict(
+        ["mixed", "great"],
+        InferenceModel(),
+        InferenceTokenizer(),
+        torch.device("cpu"),
+    )
+    assert predictions[0]["label"] == "negative"
+    assert predictions[0]["positive_probability"] == pytest.approx(0.2689, abs=1e-4)
+    assert predictions[1]["positive_probability"] == pytest.approx(0.8808, abs=1e-4)

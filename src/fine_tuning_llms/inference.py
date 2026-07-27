@@ -54,13 +54,20 @@ def predict(
         probabilities = torch.softmax(model(**encoded).logits, dim=-1)
     predictions = probabilities.argmax(dim=-1).cpu().tolist()
     confidence = probabilities.max(dim=-1).values.cpu().tolist()
+    positive_probability = probabilities[:, 1].cpu().tolist()
     return [
         {
             "text": text,
             "label": "positive" if label == 1 else "negative",
             "confidence": float(score),
+            "positive_probability": float(score_for_positive),
         }
-        for text, label, score in zip(texts, predictions, confidence)
+        for text, label, score, score_for_positive in zip(
+            texts,
+            predictions,
+            confidence,
+            positive_probability,
+        )
     ]
 
 
