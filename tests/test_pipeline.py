@@ -155,3 +155,28 @@ def test_inference_returns_positive_probability() -> None:
     assert predictions[0]["label"] == "negative"
     assert predictions[0]["positive_probability"] == pytest.approx(0.2689, abs=1e-4)
     assert predictions[1]["positive_probability"] == pytest.approx(0.8808, abs=1e-4)
+    assert predictions[1]["positive_threshold"] == 0.5
+
+
+def test_inference_uses_positive_threshold_for_labels() -> None:
+    predictions = predict(
+        ["mixed", "great"],
+        InferenceModel(),
+        InferenceTokenizer(),
+        torch.device("cpu"),
+        positive_threshold=0.9,
+    )
+
+    assert predictions[1]["label"] == "negative"
+    assert predictions[1]["confidence"] == pytest.approx(1 - 0.8808, abs=1e-4)
+
+
+def test_inference_rejects_invalid_positive_threshold() -> None:
+    with pytest.raises(ValueError, match="positive_threshold"):
+        predict(
+            ["fine"],
+            InferenceModel(),
+            InferenceTokenizer(),
+            torch.device("cpu"),
+            positive_threshold=1.0,
+        )

@@ -35,6 +35,7 @@ def predict(
     tokenizer: PreTrainedTokenizerBase,
     device: torch.device,
     max_length: int = 256,
+    positive_threshold: float = 0.5,
 ) -> list[dict[str, str | float]]:
     if not texts:
         raise ValueError("at least one text is required")
@@ -42,6 +43,8 @@ def predict(
         raise ValueError("texts must not be empty")
     if max_length < 1:
         raise ValueError("max_length must be at least 1")
+    if positive_threshold <= 0 or positive_threshold >= 1:
+        raise ValueError("positive_threshold must be between 0 and 1")
 
     encoded = tokenizer(
         texts,
@@ -52,15 +55,22 @@ def predict(
     ).to(device)
     with torch.inference_mode():
         probabilities = torch.softmax(model(**encoded).logits, dim=-1)
-    predictions = probabilities.argmax(dim=-1).cpu().tolist()
-    confidence = probabilities.max(dim=-1).values.cpu().tolist()
     positive_probability = probabilities[:, 1].cpu().tolist()
+    predictions = [
+        1 if score >= positive_threshold else 0
+        for score in positive_probability
+    ]
+    confidence = [
+        score if label == 1 else 1.0 - score
+        for label, score in zip(predictions, positive_probability)
+    ]
     return [
         {
             "text": text,
             "label": "positive" if label == 1 else "negative",
             "confidence": float(score),
             "positive_probability": float(score_for_positive),
+            "positive_threshold": positive_threshold,
         }
         for text, label, score, score_for_positive in zip(
             texts,
@@ -77,10 +87,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--text", nargs="+", required=True)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--max-length", type=int, default=256)
+    parser.add_argument("--positive-threshold", type=float, default=0.5)
     return parser
 
 
 if __name__ == "__main__":
     args = build_parser().parse_args()
     model, tokenizer, device = load_adapter(args.adapter_dir, args.device)
-    print(json.dumps(predict(args.text, model, tokenizer, device, args.max_length), indent=2))
+    print(
+        json.dumps(
+            predict(
+                args.text,
+                model,
+                tokenizer,
+                device,
+                args.max_length,
+                args.positive_threshold,
+            ),
+            indent=2,
+        )
+    )
