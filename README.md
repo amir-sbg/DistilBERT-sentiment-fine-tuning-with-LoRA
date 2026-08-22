@@ -6,7 +6,7 @@ Supervised text-classification pipeline for adapting `distilbert-base-uncased` t
 
 The project loads the IMDb dataset, creates a stratified validation split, tokenizes the reviews, and fine-tunes a parameter-efficient adapter. The base DistilBERT weights stay frozen while LoRA updates are learned in the attention layers. The classification head is saved with the adapter so the trained result can be loaded independently for inference.
 
-The test split is kept separate from training and checkpoint selection. Validation F1 is used to select the best checkpoint, while the final test metrics are written after training is complete.
+The test split is kept separate from training and checkpoint selection. Validation F1 is used to select the best checkpoint, while final test metrics, prediction confidence rows, and decision-threshold sweeps are written after training is complete.
 
 ## Pipeline
 
@@ -16,6 +16,7 @@ The test split is kept separate from training and checkpoint selection. Validati
 4. Add LoRA adapters to the DistilBERT query and value projections.
 5. Fine-tune with `Trainer`, AdamW, gradient accumulation, and early stopping.
 6. Evaluate on the untouched test set and save the adapter for inference.
+7. Sweep sentiment decision thresholds to inspect the precision/recall tradeoff before deployment.
 
 ## Fine-tuning setup
 
@@ -69,7 +70,7 @@ python -m fine_tuning_llms.pipeline \
   --report-dir reports/imdb-smoke
 ```
 
-Training options include the model name, sequence length, batch sizes, learning rate, LoRA parameters, seed, and sample limits.
+Training options include the model name, sequence length, batch sizes, learning rate, LoRA parameters, seed, sample limits, and decision thresholds for post-training analysis.
 
 ## Inference
 
@@ -99,6 +100,8 @@ reports/
 ├── dataset_sizes.json
 ├── run_config.json
 ├── run_summary.json
+├── test_predictions.json
+├── threshold_sweep.json
 └── test_metrics.json
 ```
 

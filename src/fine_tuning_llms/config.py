@@ -28,6 +28,7 @@ class FineTuneConfig:
     max_train_samples: int | None = None
     max_validation_samples: int | None = None
     max_test_samples: int | None = None
+    decision_thresholds: tuple[float, ...] = (0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65)
 
     def __post_init__(self) -> None:
         if self.max_length < 1:
@@ -57,6 +58,11 @@ class FineTuneConfig:
             for module in self.lora_target_modules
         ):
             raise ValueError("lora_target_modules must contain at least one name")
+        if not self.decision_thresholds or any(
+            threshold <= 0 or threshold >= 1
+            for threshold in self.decision_thresholds
+        ):
+            raise ValueError("decision_thresholds must be between 0 and 1")
 
 
 def ensure_output_directories(config: FineTuneConfig) -> None:

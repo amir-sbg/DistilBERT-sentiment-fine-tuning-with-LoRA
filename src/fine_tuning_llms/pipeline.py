@@ -61,6 +61,7 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         trainer=trainer,
         test_dataset=tokenized_dataset["test"],
         report_dir=config.report_dir,
+        thresholds=config.decision_thresholds,
     )
     summary = {
         "model_name": config.model_name,
@@ -100,12 +101,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-train-samples", type=int)
     parser.add_argument("--max-validation-samples", type=int)
     parser.add_argument("--max-test-samples", type=int)
+    parser.add_argument(
+        "--decision-thresholds",
+        nargs="+",
+        type=float,
+        default=[0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65],
+    )
     return parser
 
 
 def config_from_args(args: argparse.Namespace) -> FineTuneConfig:
     values = vars(args).copy()
     values["lora_target_modules"] = tuple(values["lora_target_modules"])
+    values["decision_thresholds"] = tuple(values["decision_thresholds"])
     return FineTuneConfig(**values)
 
 

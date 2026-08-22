@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -10,7 +11,11 @@ from transformers import EvalPrediction
 
 from fine_tuning_llms.config import FineTuneConfig
 from fine_tuning_llms.data import tokenize_dataset, validate_dataset
-from fine_tuning_llms.evaluate import classification_metrics
+from fine_tuning_llms.evaluate import (
+    classification_metrics,
+    evaluate_test_set,
+    threshold_sweep,
+)
 from fine_tuning_llms.inference import predict
 
 
@@ -39,6 +44,21 @@ class InferenceTokenizer:
 class InferenceModel:
     def __call__(self, **kwargs):
         return SimpleNamespace(logits=torch.tensor([[2.0, 1.0], [1.0, 3.0]]))
+
+
+class TinyTrainer:
+    def predict(self, test_dataset, metric_key_prefix):
+        return SimpleNamespace(
+            metrics={f"{metric_key_prefix}_loss": 0.2},
+            predictions=np.array(
+                [
+                    [2.0, 0.2],
+                    [0.1, 2.5],
+                    [0.6, 1.0],
+                ]
+            ),
+            label_ids=np.array([0, 1, 0]),
+        )
 
 
 def tiny_dataset() -> DatasetDict:
@@ -77,9 +97,42 @@ def test_classification_metrics_are_consistent() -> None:
     }
 
 
+def test_threshold_sweep_reports_decision_tradeoffs() -> None:
+    rows = threshold_sweep(
+        labels=np.array([0, 1, 1, 0]),
+        positive_probabilities=np.array([0.10, 0.55, 0.80, 0.60]),
+        thresholds=(0.50, 0.70),
+    )
+
+    assert rows[0]["threshold"] == 0.5
+    assert rows[0]["positive_rate"] == 0.75
+    assert rows[1]["recall"] == 0.5
+
+
+def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
+    metrics = evaluate_test_set(
+        trainer=TinyTrainer(),
+        test_dataset=tiny_dataset()["test"],
+        report_dir=tmp_path,
+        thresholds=(0.40, 0.50, 0.60),
+    )
+
+    sweep = json.loads((tmp_path / "threshold_sweep.json").read_text())
+    predictions = json.loads((tmp_path / "test_predictions.json").read_text())
+    assert metrics["test_loss"] == 0.2
+    assert metrics["test_best_threshold"] in {0.4, 0.5, 0.6}
+    assert len(sweep) == 3
+    assert predictions[0]["predicted_label"] == 0
+
+
 def test_fine_tuning_config_rejects_invalid_values() -> None:
     with pytest.raises(ValueError, match="learning_rate"):
         FineTuneConfig(learning_rate=0)
+
+
+def test_fine_tuning_config_rejects_bad_decision_thresholds() -> None:
+    with pytest.raises(ValueError, match="decision_thresholds"):
+        FineTuneConfig(decision_thresholds=(0.5, 1.2))
 
 
 def test_fine_tuning_config_accepts_custom_lora_targets() -> None:
