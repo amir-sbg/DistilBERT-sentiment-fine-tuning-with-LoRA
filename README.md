@@ -16,7 +16,8 @@ The test split is kept separate from training and checkpoint selection. Validati
 4. Add LoRA adapters to the DistilBERT query and value projections.
 5. Fine-tune with `Trainer`, AdamW, gradient accumulation, and early stopping.
 6. Evaluate on the untouched test set and save the adapter for inference.
-7. Sweep sentiment decision thresholds to inspect the precision/recall tradeoff before deployment.
+7. Record the trainable adapter budget so the LoRA parameter savings are visible.
+8. Sweep sentiment decision thresholds and inspect calibration/confidence behavior before deployment.
 
 ## Fine-tuning setup
 
@@ -34,7 +35,7 @@ The DistilBERT classification layers are included in the saved trainable modules
 
 ## Evaluation
 
-The test report includes loss, accuracy, precision, recall, F1, runtime, and throughput. The run also records dataset sizes and the exact configuration used for training.
+The test report includes loss, accuracy, precision, recall, F1, runtime, throughput, Brier score, calibration error, confidence slices, and the selected decision threshold. The run also records dataset sizes, the exact configuration, and the adapter parameter budget used for training.
 
 ## Installation
 
@@ -99,6 +100,9 @@ artifacts/imdb-distilbert-lora/
 
 reports/
 ├── dataset_sizes.json
+├── adapter_parameter_report.json
+├── calibration_report.json
+├── confidence_slices.json
 ├── run_config.json
 ├── run_summary.json
 ├── test_predictions.json

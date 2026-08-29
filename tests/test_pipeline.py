@@ -19,6 +19,7 @@ from fine_tuning_llms.evaluate import (
     threshold_sweep,
 )
 from fine_tuning_llms.inference import predict
+from fine_tuning_llms.model import parameter_report
 
 
 class TinyTokenizer:
@@ -61,6 +62,16 @@ class TinyTrainer:
             ),
             label_ids=np.array([0, 1, 0]),
         )
+
+
+class TinyAdapterModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.base = torch.nn.Linear(2, 2)
+        self.lora_A = torch.nn.Linear(2, 1, bias=False)
+        self.classifier = torch.nn.Linear(1, 2)
+        for parameter in self.base.parameters():
+            parameter.requires_grad = False
 
 
 def tiny_dataset() -> DatasetDict:
@@ -175,6 +186,16 @@ def test_fine_tuning_config_rejects_bad_decision_thresholds() -> None:
 def test_fine_tuning_config_accepts_custom_lora_targets() -> None:
     config = FineTuneConfig(lora_target_modules=("q_lin",))
     assert config.lora_target_modules == ("q_lin",)
+
+
+def test_parameter_report_separates_adapter_and_head_weights() -> None:
+    report = parameter_report(TinyAdapterModel())
+
+    assert report["total_parameters"] == 12
+    assert report["trainable_parameters"] == 6
+    assert report["frozen_parameters"] == 6
+    assert report["trainable_lora_parameters"] == 2
+    assert report["trainable_head_parameters"] == 4
 
 
 def test_inference_rejects_empty_text() -> None:

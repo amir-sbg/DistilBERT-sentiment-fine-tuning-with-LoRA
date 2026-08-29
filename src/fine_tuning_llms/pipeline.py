@@ -10,7 +10,7 @@ from transformers import set_seed
 from .config import FineTuneConfig, ensure_output_directories
 from .data import load_sentiment_dataset, split_sizes, tokenize_dataset
 from .evaluate import classification_metrics, evaluate_test_set
-from .model import build_lora_model, load_tokenizer
+from .model import build_lora_model, load_tokenizer, parameter_report
 from .train import fine_tune
 
 
@@ -50,6 +50,10 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         lora_dropout=config.lora_dropout,
         target_modules=config.lora_target_modules,
     )
+    adapter_report = parameter_report(model)
+    (config.report_dir / "adapter_parameter_report.json").write_text(
+        json.dumps(adapter_report, indent=2) + "\n"
+    )
     trainer = fine_tune(
         model=model,
         tokenizer=tokenizer,
@@ -67,6 +71,8 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         "model_name": config.model_name,
         "dataset_name": config.dataset_name,
         "adapter_dir": str(config.output_dir),
+        "trainable_fraction": adapter_report["trainable_fraction"],
+        "trainable_parameters": adapter_report["trainable_parameters"],
         **metrics,
     }
     (config.report_dir / "run_summary.json").write_text(
