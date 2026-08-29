@@ -122,6 +122,15 @@ def test_threshold_sweep_reports_decision_tradeoffs() -> None:
     assert rows[1]["recall"] == 0.5
 
 
+def test_threshold_sweep_rejects_probability_range_errors() -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        threshold_sweep(
+            labels=np.array([0, 1]),
+            positive_probabilities=np.array([0.2, 1.2]),
+            thresholds=(0.5,),
+        )
+
+
 def test_calibration_report_tracks_probability_reliability() -> None:
     report = calibration_report(
         labels=np.array([0, 0, 1, 1]),

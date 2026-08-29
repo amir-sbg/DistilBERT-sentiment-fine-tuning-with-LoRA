@@ -52,10 +52,7 @@ def threshold_metrics(
 ) -> dict[str, float]:
     if threshold <= 0 or threshold >= 1:
         raise ValueError("threshold must be between 0 and 1")
-    labels = np.asarray(labels)
-    probabilities = np.asarray(positive_probabilities)
-    if labels.shape[0] != probabilities.shape[0]:
-        raise ValueError("labels and probabilities must have the same length")
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
 
     predicted_labels = (probabilities >= threshold).astype(int)
     return {
@@ -169,8 +166,7 @@ def threshold_sweep(
 
 
 def prediction_records(labels, positive_probabilities) -> list[dict[str, float | int]]:
-    labels = np.asarray(labels)
-    probabilities = np.asarray(positive_probabilities)
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
     predicted_labels = (probabilities >= 0.5).astype(int)
     confidence = np.where(predicted_labels == 1, probabilities, 1.0 - probabilities)
     return [
