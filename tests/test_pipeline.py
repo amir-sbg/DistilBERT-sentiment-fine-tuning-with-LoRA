@@ -12,7 +12,9 @@ from transformers import EvalPrediction
 from fine_tuning_llms.config import FineTuneConfig
 from fine_tuning_llms.data import tokenize_dataset, validate_dataset
 from fine_tuning_llms.evaluate import (
+    calibration_report,
     classification_metrics,
+    confidence_slices,
     evaluate_test_set,
     threshold_sweep,
 )
@@ -109,6 +111,36 @@ def test_threshold_sweep_reports_decision_tradeoffs() -> None:
     assert rows[1]["recall"] == 0.5
 
 
+def test_calibration_report_tracks_probability_reliability() -> None:
+    report = calibration_report(
+        labels=np.array([0, 0, 1, 1]),
+        positive_probabilities=np.array([0.10, 0.30, 0.70, 0.90]),
+        bins=2,
+    )
+
+    assert report["brier_score"] == pytest.approx(0.05)
+    assert report["expected_calibration_error"] == pytest.approx(0.20)
+    assert len(report["table"]) == 2
+
+
+def test_confidence_slices_separate_error_bands() -> None:
+    rows = confidence_slices(
+        labels=np.array([0, 1, 1, 0]),
+        positive_probabilities=np.array([0.48, 0.72, 0.93, 0.88]),
+        threshold=0.5,
+    )
+    by_slice = {row["slice"]: row for row in rows}
+
+    assert by_slice["low"]["count"] == 1
+    assert by_slice["medium"]["accuracy"] == 1.0
+    assert by_slice["high"]["error_rate"] == 0.5
+
+
+def test_calibration_report_rejects_invalid_probabilities() -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        calibration_report(np.array([0, 1]), np.array([0.2, 1.4]))
+
+
 def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     metrics = evaluate_test_set(
         trainer=TinyTrainer(),
@@ -118,10 +150,15 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     )
 
     sweep = json.loads((tmp_path / "threshold_sweep.json").read_text())
+    calibration = json.loads((tmp_path / "calibration_report.json").read_text())
+    confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
     predictions = json.loads((tmp_path / "test_predictions.json").read_text())
     assert metrics["test_loss"] == 0.2
     assert metrics["test_best_threshold"] in {0.4, 0.5, 0.6}
+    assert "test_expected_calibration_error" in metrics
     assert len(sweep) == 3
+    assert calibration["n_examples"] == 3
+    assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
     assert predictions[0]["predicted_label"] == 0
 
 
