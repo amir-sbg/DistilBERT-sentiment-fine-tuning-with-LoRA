@@ -49,17 +49,28 @@ def threshold_metrics(
     labels,
     positive_probabilities,
     threshold: float,
-) -> dict[str, float]:
+) -> dict[str, float | int]:
     if threshold <= 0 or threshold >= 1:
         raise ValueError("threshold must be between 0 and 1")
     labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
 
     predicted_labels = (probabilities >= threshold).astype(int)
+    true_negative, false_positive, false_negative, true_positive = _confusion_counts(
+        labels,
+        predicted_labels,
+    )
     return {
         "threshold": float(threshold),
+        "true_negative": true_negative,
+        "false_positive": false_positive,
+        "false_negative": false_negative,
+        "true_positive": true_positive,
         "accuracy": float(accuracy_score(labels, predicted_labels)),
         "precision": float(precision_score(labels, predicted_labels, zero_division=0)),
         "recall": float(recall_score(labels, predicted_labels, zero_division=0)),
+        "specificity": _safe_rate(true_negative, true_negative + false_positive),
+        "false_positive_rate": _safe_rate(false_positive, false_positive + true_negative),
+        "false_negative_rate": _safe_rate(false_negative, false_negative + true_positive),
         "f1": float(f1_score(labels, predicted_labels, zero_division=0)),
         "positive_rate": float(np.mean(predicted_labels)),
     }
@@ -158,7 +169,7 @@ def threshold_sweep(
     labels,
     positive_probabilities,
     thresholds: tuple[float, ...],
-) -> list[dict[str, float]]:
+) -> list[dict[str, float | int]]:
     return [
         threshold_metrics(labels, positive_probabilities, threshold)
         for threshold in thresholds
@@ -199,6 +210,21 @@ def _validated_binary_arrays(labels, positive_probabilities) -> tuple[np.ndarray
     if np.any((probabilities < 0.0) | (probabilities > 1.0)):
         raise ValueError("probabilities must be between 0 and 1")
     return labels, probabilities
+
+
+def _confusion_counts(
+    labels: np.ndarray,
+    predicted_labels: np.ndarray,
+) -> tuple[int, int, int, int]:
+    true_negative = int(((labels == 0) & (predicted_labels == 0)).sum())
+    false_positive = int(((labels == 0) & (predicted_labels == 1)).sum())
+    false_negative = int(((labels == 1) & (predicted_labels == 0)).sum())
+    true_positive = int(((labels == 1) & (predicted_labels == 1)).sum())
+    return true_negative, false_positive, false_negative, true_positive
+
+
+def _safe_rate(numerator: int, denominator: int) -> float:
+    return float(numerator / denominator) if denominator else 0.0
 
 
 def evaluate_test_set(

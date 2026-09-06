@@ -119,6 +119,12 @@ def test_threshold_sweep_reports_decision_tradeoffs() -> None:
 
     assert rows[0]["threshold"] == 0.5
     assert rows[0]["positive_rate"] == 0.75
+    assert rows[0]["true_negative"] == 1
+    assert rows[0]["false_positive"] == 1
+    assert rows[0]["false_negative"] == 0
+    assert rows[0]["specificity"] == 0.5
+    assert rows[0]["false_positive_rate"] == 0.5
+    assert rows[0]["false_negative_rate"] == 0.0
     assert rows[1]["recall"] == 0.5
 
 
