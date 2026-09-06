@@ -194,6 +194,43 @@ def prediction_records(labels, positive_probabilities) -> list[dict[str, float |
     ]
 
 
+def confident_error_records(
+    labels,
+    positive_probabilities,
+    threshold: float = 0.5,
+    top_k: int = 20,
+) -> list[dict[str, float | int | str]]:
+    if threshold <= 0 or threshold >= 1:
+        raise ValueError("threshold must be between 0 and 1")
+    if top_k < 1:
+        raise ValueError("top_k must be at least 1")
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
+
+    predicted_labels = (probabilities >= threshold).astype(int)
+    confidence = np.where(predicted_labels == 1, probabilities, 1.0 - probabilities)
+    error_indices = np.flatnonzero(predicted_labels != labels)
+    ranked_indices = sorted(
+        error_indices,
+        key=lambda index: confidence[index],
+        reverse=True,
+    )[:top_k]
+    return [
+        {
+            "index": int(index),
+            "label": int(labels[index]),
+            "predicted_label": int(predicted_labels[index]),
+            "positive_probability": float(probabilities[index]),
+            "confidence": float(confidence[index]),
+            "error_type": (
+                "false_positive"
+                if predicted_labels[index] == 1
+                else "false_negative"
+            ),
+        }
+        for index in ranked_indices
+    ]
+
+
 def _validated_binary_arrays(labels, positive_probabilities) -> tuple[np.ndarray, np.ndarray]:
     labels = np.asarray(labels, dtype=int)
     probabilities = np.asarray(positive_probabilities, dtype=float)
@@ -250,6 +287,11 @@ def evaluate_test_set(
         probabilities,
         threshold=best_threshold["threshold"],
     )
+    confident_errors = confident_error_records(
+        output.label_ids,
+        probabilities,
+        threshold=best_threshold["threshold"],
+    )
     high_confidence = next(row for row in confidence if row["slice"] == "high")
     serializable.update(
         {
@@ -262,6 +304,7 @@ def evaluate_test_set(
                 "expected_calibration_error"
             ],
             "test_high_confidence_error_rate": high_confidence["error_rate"],
+            "test_confident_error_count": len(confident_errors),
         }
     )
 
@@ -277,6 +320,9 @@ def evaluate_test_set(
     )
     (report_dir / "confidence_slices.json").write_text(
         json.dumps(confidence, indent=2) + "\n"
+    )
+    (report_dir / "confident_errors.json").write_text(
+        json.dumps(confident_errors, indent=2) + "\n"
     )
     (report_dir / "test_predictions.json").write_text(
         json.dumps(prediction_records(output.label_ids, probabilities), indent=2) + "\n"

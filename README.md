@@ -35,7 +35,7 @@ The DistilBERT classification layers are included in the saved trainable modules
 
 ## Evaluation
 
-The test report includes loss, accuracy, precision, recall, F1, runtime, throughput, Brier score, calibration error, confidence slices, and the selected decision threshold. The run also records dataset sizes, the exact configuration, and the adapter parameter budget used for training.
+The test report includes loss, accuracy, precision, recall, F1, runtime, throughput, Brier score, calibration error, confidence slices, confident mistakes, and the selected decision threshold. The run also records dataset sizes, the exact configuration, and the adapter parameter budget used for training.
 
 ## Installation
 
@@ -102,6 +102,7 @@ reports/
 ├── dataset_sizes.json
 ├── adapter_parameter_report.json
 ├── calibration_report.json
+├── confident_errors.json
 ├── confidence_slices.json
 ├── run_config.json
 ├── run_summary.json

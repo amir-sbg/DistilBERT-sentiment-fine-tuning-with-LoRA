@@ -14,6 +14,7 @@ from fine_tuning_llms.data import tokenize_dataset, validate_dataset
 from fine_tuning_llms.evaluate import (
     calibration_report,
     classification_metrics,
+    confident_error_records,
     confidence_slices,
     evaluate_test_set,
     threshold_sweep,
@@ -162,6 +163,21 @@ def test_confidence_slices_separate_error_bands() -> None:
     assert by_slice["high"]["error_rate"] == 0.5
 
 
+def test_confident_error_records_are_ranked_by_confidence() -> None:
+    rows = confident_error_records(
+        labels=np.array([0, 1, 1, 0]),
+        positive_probabilities=np.array([0.91, 0.20, 0.65, 0.40]),
+        threshold=0.5,
+        top_k=2,
+    )
+
+    assert [row["error_type"] for row in rows] == [
+        "false_positive",
+        "false_negative",
+    ]
+    assert rows[0]["confidence"] > rows[1]["confidence"]
+
+
 def test_calibration_report_rejects_invalid_probabilities() -> None:
     with pytest.raises(ValueError, match="between 0 and 1"):
         calibration_report(np.array([0, 1]), np.array([0.2, 1.4]))
@@ -178,6 +194,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     sweep = json.loads((tmp_path / "threshold_sweep.json").read_text())
     calibration = json.loads((tmp_path / "calibration_report.json").read_text())
     confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
+    confident_errors = json.loads((tmp_path / "confident_errors.json").read_text())
     predictions = json.loads((tmp_path / "test_predictions.json").read_text())
     assert metrics["test_loss"] == 0.2
     assert metrics["test_best_threshold"] in {0.4, 0.5, 0.6}
@@ -185,6 +202,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     assert len(sweep) == 3
     assert calibration["n_examples"] == 3
     assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
+    assert metrics["test_confident_error_count"] == len(confident_errors)
     assert predictions[0]["predicted_label"] == 0
 
 
