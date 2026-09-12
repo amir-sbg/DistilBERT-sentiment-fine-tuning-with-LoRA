@@ -10,7 +10,7 @@ from datasets import Dataset, DatasetDict
 from transformers import EvalPrediction
 
 from fine_tuning_llms.config import FineTuneConfig
-from fine_tuning_llms.data import tokenize_dataset, validate_dataset
+from fine_tuning_llms.data import label_distribution, tokenize_dataset, validate_dataset
 from fine_tuning_llms.evaluate import (
     calibration_report,
     classification_metrics,
@@ -95,6 +95,14 @@ def test_tokenization_removes_raw_text() -> None:
     assert "text" not in tokenized["train"].column_names
     assert "input_ids" in tokenized["train"].column_names
     assert tokenized["train"][0]["input_ids"] == [0, 1]
+
+
+def test_label_distribution_reports_each_split() -> None:
+    report = label_distribution(tiny_dataset())
+
+    assert report["train"]["rows"] == 2
+    assert report["validation"]["positive"] == 1
+    assert report["test"]["positive_rate"] == 0.5
 
 
 def test_classification_metrics_are_consistent() -> None:

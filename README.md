@@ -100,6 +100,7 @@ artifacts/imdb-distilbert-lora/
 
 reports/
 ├── dataset_sizes.json
+├── dataset_profile.json
 ├── adapter_parameter_report.json
 ├── calibration_report.json
 ├── confident_errors.json

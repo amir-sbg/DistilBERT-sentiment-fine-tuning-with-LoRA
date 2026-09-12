@@ -8,7 +8,12 @@ from pathlib import Path
 from transformers import set_seed
 
 from .config import FineTuneConfig, ensure_output_directories
-from .data import load_sentiment_dataset, split_sizes, tokenize_dataset
+from .data import (
+    label_distribution,
+    load_sentiment_dataset,
+    split_sizes,
+    tokenize_dataset,
+)
 from .evaluate import classification_metrics, evaluate_test_set
 from .model import build_lora_model, load_tokenizer, parameter_report
 from .train import fine_tune
@@ -35,8 +40,15 @@ def run(config: FineTuneConfig) -> dict[str, float]:
     )
     tokenizer = load_tokenizer(config.model_name)
     tokenized_dataset = tokenize_dataset(dataset, tokenizer, config.max_length)
+    dataset_profile = {
+        "sizes": split_sizes(dataset),
+        "label_distribution": label_distribution(dataset),
+    }
     (config.report_dir / "dataset_sizes.json").write_text(
-        json.dumps(split_sizes(dataset), indent=2) + "\n"
+        json.dumps(dataset_profile["sizes"], indent=2) + "\n"
+    )
+    (config.report_dir / "dataset_profile.json").write_text(
+        json.dumps(dataset_profile, indent=2) + "\n"
     )
     (config.report_dir / "run_config.json").write_text(
         json.dumps(_config_payload(config), indent=2) + "\n"
@@ -71,6 +83,7 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         "model_name": config.model_name,
         "dataset_name": config.dataset_name,
         "adapter_dir": str(config.output_dir),
+        "dataset_profile": dataset_profile,
         "trainable_fraction": adapter_report["trainable_fraction"],
         "trainable_parameters": adapter_report["trainable_parameters"],
         **metrics,

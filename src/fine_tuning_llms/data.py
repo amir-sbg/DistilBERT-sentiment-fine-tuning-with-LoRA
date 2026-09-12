@@ -106,3 +106,19 @@ def tokenize_dataset(
 
 def split_sizes(dataset: Mapping[str, Dataset]) -> dict[str, int]:
     return {split_name: len(split) for split_name, split in dataset.items()}
+
+
+def label_distribution(dataset: Mapping[str, Dataset]) -> dict[str, dict[str, float | int]]:
+    validate_dataset(dataset)
+    report = {}
+    for split_name, split in dataset.items():
+        labels = split[LABEL_COLUMN]
+        positives = int(sum(1 for label in labels if int(label) == 1))
+        rows = int(len(labels))
+        report[split_name] = {
+            "rows": rows,
+            "negative": int(rows - positives),
+            "positive": positives,
+            "positive_rate": float(positives / rows) if rows else 0.0,
+        }
+    return report
