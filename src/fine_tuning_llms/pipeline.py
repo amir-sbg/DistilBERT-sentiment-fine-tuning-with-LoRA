@@ -78,6 +78,7 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         test_dataset=tokenized_dataset["test"],
         report_dir=config.report_dir,
         thresholds=config.decision_thresholds,
+        minimum_recall=config.minimum_recall,
     )
     summary = {
         "model_name": config.model_name,
@@ -126,6 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=[0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65],
     )
+    parser.add_argument("--minimum-recall", type=float)
     return parser
 
 

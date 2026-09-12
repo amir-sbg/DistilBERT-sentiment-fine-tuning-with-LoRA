@@ -176,6 +176,29 @@ def threshold_sweep(
     ]
 
 
+def select_threshold_with_recall_floor(
+    labels,
+    positive_probabilities,
+    thresholds: tuple[float, ...],
+    minimum_recall: float,
+) -> dict[str, float | int | str]:
+    if not 0 < minimum_recall <= 1:
+        raise ValueError("minimum_recall must be in (0, 1]")
+    rows = threshold_sweep(labels, positive_probabilities, thresholds)
+    candidates = [row for row in rows if row["recall"] >= minimum_recall]
+    if candidates:
+        selected = max(candidates, key=lambda row: (row["f1"], row["precision"]))
+        reason = "selected best F1 among thresholds that satisfy recall floor"
+    else:
+        selected = max(rows, key=lambda row: (row["recall"], row["f1"]))
+        reason = "no threshold satisfied recall floor; selected highest recall"
+    return {
+        **selected,
+        "minimum_recall": float(minimum_recall),
+        "selection_reason": reason,
+    }
+
+
 def prediction_records(labels, positive_probabilities) -> list[dict[str, float | int]]:
     labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
     predicted_labels = (probabilities >= 0.5).astype(int)
@@ -269,6 +292,7 @@ def evaluate_test_set(
     test_dataset: Any,
     report_dir: Path,
     thresholds: tuple[float, ...] = (0.5,),
+    minimum_recall: float | None = None,
 ) -> dict[str, float]:
     output = trainer.predict(
         test_dataset=test_dataset,
@@ -282,6 +306,14 @@ def evaluate_test_set(
     sweep = threshold_sweep(output.label_ids, probabilities, thresholds)
     best_threshold = max(sweep, key=lambda row: (row["f1"], row["accuracy"]))
     calibration = calibration_report(output.label_ids, probabilities)
+    recall_floor_report = None
+    if minimum_recall is not None:
+        recall_floor_report = select_threshold_with_recall_floor(
+            output.label_ids,
+            probabilities,
+            thresholds,
+            minimum_recall,
+        )
     confidence = confidence_slices(
         output.label_ids,
         probabilities,
@@ -307,6 +339,10 @@ def evaluate_test_set(
             "test_confident_error_count": len(confident_errors),
         }
     )
+    if recall_floor_report is not None:
+        serializable["test_recall_floor_threshold"] = recall_floor_report["threshold"]
+        serializable["test_recall_floor_f1"] = recall_floor_report["f1"]
+        serializable["test_recall_floor_recall"] = recall_floor_report["recall"]
 
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "test_metrics.json").write_text(
@@ -315,6 +351,10 @@ def evaluate_test_set(
     (report_dir / "threshold_sweep.json").write_text(
         json.dumps(sweep, indent=2) + "\n"
     )
+    if recall_floor_report is not None:
+        (report_dir / "threshold_recall_floor.json").write_text(
+            json.dumps(recall_floor_report, indent=2) + "\n"
+        )
     (report_dir / "calibration_report.json").write_text(
         json.dumps(calibration, indent=2) + "\n"
     )

@@ -18,6 +18,7 @@ The test split is kept separate from training and checkpoint selection. Validati
 6. Evaluate on the untouched test set and save the adapter for inference.
 7. Record the trainable adapter budget so the LoRA parameter savings are visible.
 8. Sweep sentiment decision thresholds and inspect calibration/confidence behavior before deployment.
+9. Optionally choose a deployment threshold with a minimum recall constraint.
 
 ## Fine-tuning setup
 
@@ -72,6 +73,7 @@ python -m fine_tuning_llms.pipeline \
 ```
 
 Training options include the model name, sequence length, batch sizes, learning rate, LoRA parameters, seed, sample limits, and decision thresholds for post-training analysis.
+Use `--minimum-recall 0.90` when the selected operating point should keep recall above a target floor.
 
 ## Inference
 
@@ -108,6 +110,7 @@ reports/
 ├── run_config.json
 ├── run_summary.json
 ├── test_predictions.json
+├── threshold_recall_floor.json
 ├── threshold_sweep.json
 └── test_metrics.json
 ```

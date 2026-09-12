@@ -29,6 +29,7 @@ class FineTuneConfig:
     max_validation_samples: int | None = None
     max_test_samples: int | None = None
     decision_thresholds: tuple[float, ...] = (0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65)
+    minimum_recall: float | None = None
 
     def __post_init__(self) -> None:
         if self.max_length < 1:
@@ -63,6 +64,8 @@ class FineTuneConfig:
             for threshold in self.decision_thresholds
         ):
             raise ValueError("decision_thresholds must be between 0 and 1")
+        if self.minimum_recall is not None and not 0 < self.minimum_recall <= 1:
+            raise ValueError("minimum_recall must be in (0, 1]")
 
 
 def ensure_output_directories(config: FineTuneConfig) -> None:

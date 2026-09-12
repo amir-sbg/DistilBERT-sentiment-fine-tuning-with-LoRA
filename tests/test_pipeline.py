@@ -17,6 +17,7 @@ from fine_tuning_llms.evaluate import (
     confident_error_records,
     confidence_slices,
     evaluate_test_set,
+    select_threshold_with_recall_floor,
     threshold_sweep,
 )
 from fine_tuning_llms.inference import predict
@@ -137,6 +138,31 @@ def test_threshold_sweep_reports_decision_tradeoffs() -> None:
     assert rows[1]["recall"] == 0.5
 
 
+def test_select_threshold_with_recall_floor_prefers_feasible_f1() -> None:
+    result = select_threshold_with_recall_floor(
+        labels=np.array([0, 1, 1, 0]),
+        positive_probabilities=np.array([0.10, 0.45, 0.80, 0.55]),
+        thresholds=(0.40, 0.60),
+        minimum_recall=1.0,
+    )
+
+    assert result["threshold"] == 0.4
+    assert result["recall"] == 1.0
+    assert "recall floor" in result["selection_reason"]
+
+
+def test_select_threshold_with_recall_floor_falls_back_to_highest_recall() -> None:
+    result = select_threshold_with_recall_floor(
+        labels=np.array([0, 1]),
+        positive_probabilities=np.array([0.70, 0.20]),
+        thresholds=(0.60, 0.80),
+        minimum_recall=0.5,
+    )
+
+    assert result["recall"] == 0.0
+    assert "no threshold satisfied" in result["selection_reason"]
+
+
 def test_threshold_sweep_rejects_probability_range_errors() -> None:
     with pytest.raises(ValueError, match="between 0 and 1"):
         threshold_sweep(
@@ -197,15 +223,19 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
         test_dataset=tiny_dataset()["test"],
         report_dir=tmp_path,
         thresholds=(0.40, 0.50, 0.60),
+        minimum_recall=0.5,
     )
 
     sweep = json.loads((tmp_path / "threshold_sweep.json").read_text())
+    recall_floor = json.loads((tmp_path / "threshold_recall_floor.json").read_text())
     calibration = json.loads((tmp_path / "calibration_report.json").read_text())
     confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
     confident_errors = json.loads((tmp_path / "confident_errors.json").read_text())
     predictions = json.loads((tmp_path / "test_predictions.json").read_text())
     assert metrics["test_loss"] == 0.2
     assert metrics["test_best_threshold"] in {0.4, 0.5, 0.6}
+    assert "test_recall_floor_threshold" in metrics
+    assert recall_floor["minimum_recall"] == 0.5
     assert "test_expected_calibration_error" in metrics
     assert len(sweep) == 3
     assert calibration["n_examples"] == 3
