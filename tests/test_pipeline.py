@@ -51,6 +51,16 @@ class InferenceModel:
         return SimpleNamespace(logits=torch.tensor([[2.0, 1.0], [1.0, 3.0]]))
 
 
+class BatchAwareInferenceModel:
+    def __call__(self, **kwargs):
+        rows = kwargs["input_ids"].shape[0]
+        negative_logit = torch.zeros(rows)
+        positive_logit = torch.linspace(-1.0, 1.0, rows)
+        return SimpleNamespace(
+            logits=torch.stack([negative_logit, positive_logit], dim=1)
+        )
+
+
 class TinyTrainer:
     def predict(self, test_dataset, metric_key_prefix):
         return SimpleNamespace(
@@ -276,11 +286,12 @@ def test_inference_rejects_empty_text() -> None:
 
 def test_inference_returns_positive_probability() -> None:
     predictions = predict(
-        ["mixed", "great"],
+        ["  mixed  ", "great"],
         InferenceModel(),
         InferenceTokenizer(),
         torch.device("cpu"),
     )
+    assert predictions[0]["text"] == "mixed"
     assert predictions[0]["label"] == "negative"
     assert predictions[0]["positive_probability"] == pytest.approx(0.2689, abs=1e-4)
     assert predictions[1]["positive_probability"] == pytest.approx(0.8808, abs=1e-4)
@@ -308,4 +319,28 @@ def test_inference_rejects_invalid_positive_threshold() -> None:
             InferenceTokenizer(),
             torch.device("cpu"),
             positive_threshold=1.0,
+        )
+
+
+def test_inference_batches_longer_text_lists() -> None:
+    predictions = predict(
+        ["first", "second", "third"],
+        BatchAwareInferenceModel(),
+        InferenceTokenizer(),
+        torch.device("cpu"),
+        batch_size=1,
+    )
+
+    assert len(predictions) == 3
+    assert [row["text"] for row in predictions] == ["first", "second", "third"]
+
+
+def test_inference_rejects_invalid_batch_size() -> None:
+    with pytest.raises(ValueError, match="batch_size"):
+        predict(
+            ["fine"],
+            InferenceModel(),
+            InferenceTokenizer(),
+            torch.device("cpu"),
+            batch_size=0,
         )

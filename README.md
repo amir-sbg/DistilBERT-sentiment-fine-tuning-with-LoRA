@@ -85,10 +85,11 @@ python -m fine_tuning_llms.inference \
   --text "A thoughtful, well-acted film with a strong ending." \
         "The story was slow and difficult to follow." \
   --device auto \
-  --positive-threshold 0.50
+  --positive-threshold 0.50 \
+  --batch-size 16
 ```
 
-With `--device auto`, inference selects CUDA, Apple MPS, or CPU when available. `--positive-threshold` can be set from `reports/threshold_sweep.json` when a different precision/recall balance is preferred.
+With `--device auto`, inference selects CUDA, Apple MPS, or CPU when available. `--positive-threshold` can be set from `reports/threshold_sweep.json` when a different precision/recall balance is preferred. `--batch-size` keeps inference predictable when classifying a longer list of reviews.
 
 ## Outputs
 
