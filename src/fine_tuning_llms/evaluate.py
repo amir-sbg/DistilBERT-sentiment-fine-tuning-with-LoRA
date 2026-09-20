@@ -18,8 +18,10 @@ from transformers import EvalPrediction, Trainer
 def _logits_array(predictions) -> np.ndarray:
     logits = predictions[0] if isinstance(predictions, tuple) else predictions
     values = np.asarray(logits)
-    if values.ndim != 2 or values.shape[1] < 2:
-        raise ValueError("classification logits must have shape (n_examples, n_labels)")
+    if values.ndim != 2 or values.shape[1] != 2:
+        raise ValueError("binary classification logits must have shape (n_examples, 2)")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("classification logits must be finite")
     return values
 
 
@@ -34,6 +36,10 @@ def _positive_probabilities(predictions) -> np.ndarray:
 def classification_metrics(prediction: EvalPrediction) -> dict[str, float]:
     logits = _logits_array(prediction.predictions)
     labels = np.asarray(prediction.label_ids)
+    if labels.ndim != 1 or labels.shape[0] != logits.shape[0]:
+        raise ValueError("labels must be one-dimensional and match the logits")
+    if not set(np.unique(labels)).issubset({0, 1}):
+        raise ValueError("labels must be binary")
     predicted_labels = np.argmax(logits, axis=-1)
     return {
         "accuracy": float(accuracy_score(labels, predicted_labels)),

@@ -130,6 +130,23 @@ def test_classification_metrics_are_consistent() -> None:
     }
 
 
+def test_classification_metrics_reject_non_binary_logits() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        classification_metrics(
+            EvalPrediction(
+                predictions=np.zeros((2, 3)),
+                label_ids=np.array([0, 1]),
+            )
+        )
+    with pytest.raises(ValueError, match="finite"):
+        classification_metrics(
+            EvalPrediction(
+                predictions=np.array([[np.nan, 0.0], [0.0, 1.0]]),
+                label_ids=np.array([0, 1]),
+            )
+        )
+
+
 def test_threshold_sweep_reports_decision_tradeoffs() -> None:
     rows = threshold_sweep(
         labels=np.array([0, 1, 1, 0]),
