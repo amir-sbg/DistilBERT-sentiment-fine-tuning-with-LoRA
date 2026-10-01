@@ -37,7 +37,8 @@ def predict(
     max_length: int = 256,
     positive_threshold: float = 0.5,
     batch_size: int = 16,
-) -> list[dict[str, str | float]]:
+    abstain_below: float | None = None,
+) -> list[dict[str, str | float | bool]]:
     texts = _clean_texts(texts)
     if max_length < 1:
         raise ValueError("max_length must be at least 1")
@@ -45,6 +46,8 @@ def predict(
         raise ValueError("positive_threshold must be between 0 and 1")
     if batch_size < 1:
         raise ValueError("batch_size must be at least 1")
+    if abstain_below is not None and not 0.5 <= abstain_below < 1.0:
+        raise ValueError("abstain_below must be in [0.5, 1)")
 
     records = []
     for start in range(0, len(texts), batch_size):
@@ -67,21 +70,27 @@ def predict(
             score if label == 1 else 1.0 - score
             for label, score in zip(predictions, positive_probability)
         ]
-        records.extend(
-            {
-                "text": text,
-                "label": "positive" if label == 1 else "negative",
-                "confidence": float(score),
-                "positive_probability": float(score_for_positive),
-                "positive_threshold": positive_threshold,
-            }
-            for text, label, score, score_for_positive in zip(
-                batch_texts,
-                predictions,
-                confidence,
-                positive_probability,
+        for text, label, score, score_for_positive in zip(
+            batch_texts,
+            predictions,
+            confidence,
+            positive_probability,
+        ):
+            abstained = abstain_below is not None and score < abstain_below
+            records.append(
+                {
+                    "text": text,
+                    "label": (
+                        "abstain"
+                        if abstained
+                        else "positive" if label == 1 else "negative"
+                    ),
+                    "abstained": abstained,
+                    "confidence": float(score),
+                    "positive_probability": float(score_for_positive),
+                    "positive_threshold": positive_threshold,
+                }
             )
-        )
     return records
 
 
@@ -102,6 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--positive-threshold", type=float, default=0.5)
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--abstain-below", type=float)
     return parser
 
 
@@ -118,6 +128,7 @@ if __name__ == "__main__":
                 args.max_length,
                 args.positive_threshold,
                 args.batch_size,
+                args.abstain_below,
             ),
             indent=2,
         )

@@ -368,6 +368,32 @@ def test_inference_uses_positive_threshold_for_labels() -> None:
     assert predictions[1]["confidence"] == pytest.approx(1 - 0.8808, abs=1e-4)
 
 
+def test_inference_can_abstain_on_low_confidence_predictions() -> None:
+    predictions = predict(
+        ["mixed", "great"],
+        InferenceModel(),
+        InferenceTokenizer(),
+        torch.device("cpu"),
+        abstain_below=0.8,
+    )
+
+    assert predictions[0]["label"] == "abstain"
+    assert predictions[0]["abstained"] is True
+    assert predictions[1]["label"] == "positive"
+    assert predictions[1]["abstained"] is False
+
+
+def test_inference_rejects_invalid_abstention_threshold() -> None:
+    with pytest.raises(ValueError, match="abstain_below"):
+        predict(
+            ["fine"],
+            InferenceModel(),
+            InferenceTokenizer(),
+            torch.device("cpu"),
+            abstain_below=0.4,
+        )
+
+
 def test_inference_rejects_invalid_positive_threshold() -> None:
     with pytest.raises(ValueError, match="positive_threshold"):
         predict(
