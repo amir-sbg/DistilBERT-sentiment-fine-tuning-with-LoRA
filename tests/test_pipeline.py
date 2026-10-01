@@ -10,7 +10,12 @@ from datasets import Dataset, DatasetDict
 from transformers import EvalPrediction
 
 from fine_tuning_llms.config import FineTuneConfig
-from fine_tuning_llms.data import label_distribution, tokenize_dataset, validate_dataset
+from fine_tuning_llms.data import (
+    _limit_split,
+    label_distribution,
+    tokenize_dataset,
+    validate_dataset,
+)
 from fine_tuning_llms.evaluate import (
     calibration_report,
     classification_metrics,
@@ -114,6 +119,22 @@ def test_label_distribution_reports_each_split() -> None:
     assert report["train"]["rows"] == 2
     assert report["validation"]["positive"] == 1
     assert report["test"]["positive_rate"] == 0.5
+
+
+def test_sample_limit_preserves_label_balance() -> None:
+    dataset = Dataset.from_dict(
+        {
+            "text": [f"review {index}" for index in range(10)],
+            "label": [0] * 8 + [1] * 2,
+        }
+    )
+
+    limited = _limit_split(dataset, limit=5, seed=7)
+
+    assert len(limited) == 5
+    assert limited["label"].count(0) == 4
+    assert limited["label"].count(1) == 1
+    assert _limit_split(dataset, limit=5, seed=7)["text"] == limited["text"]
 
 
 def test_classification_metrics_are_consistent() -> None:

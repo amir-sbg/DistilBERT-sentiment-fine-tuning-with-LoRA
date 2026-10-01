@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import numpy as np
 from datasets import Dataset, DatasetDict, load_dataset
 from transformers import PreTrainedTokenizerBase
 
@@ -30,7 +31,34 @@ def _limit_split(dataset: Dataset, limit: int | None, seed: int) -> Dataset:
     if limit < 1:
         raise ValueError("sample limits must be at least 1")
     count = min(limit, len(dataset))
-    return dataset.shuffle(seed=seed).select(range(count))
+    if count == len(dataset):
+        return dataset
+
+    labels = np.asarray(dataset[LABEL_COLUMN], dtype=int)
+    classes, class_counts = np.unique(labels, return_counts=True)
+    exact = class_counts / class_counts.sum() * count
+    quotas = np.floor(exact).astype(int)
+    if count >= len(classes):
+        quotas = np.maximum(quotas, 1)
+    quotas = np.minimum(quotas, class_counts)
+
+    while quotas.sum() < count:
+        candidates = np.flatnonzero(quotas < class_counts)
+        index = max(candidates, key=lambda item: (exact[item] - quotas[item], class_counts[item]))
+        quotas[index] += 1
+    while quotas.sum() > count:
+        minimum = 1 if count >= len(classes) else 0
+        candidates = np.flatnonzero(quotas > minimum)
+        index = min(candidates, key=lambda item: (exact[item] - quotas[item], -quotas[item]))
+        quotas[index] -= 1
+
+    generator = np.random.default_rng(seed)
+    selected = []
+    for label, quota in zip(classes, quotas):
+        class_indices = np.flatnonzero(labels == label)
+        selected.extend(generator.choice(class_indices, size=quota, replace=False).tolist())
+    generator.shuffle(selected)
+    return dataset.select(selected)
 
 
 def load_sentiment_dataset(
