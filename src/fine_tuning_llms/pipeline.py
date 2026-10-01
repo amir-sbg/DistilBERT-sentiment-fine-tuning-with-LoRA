@@ -16,7 +16,7 @@ from .data import (
 )
 from .evaluate import classification_metrics, evaluate_test_set
 from .model import build_lora_model, load_tokenizer, parameter_report
-from .train import fine_tune
+from .train import fine_tune, optimization_plan
 
 
 def _config_payload(config: FineTuneConfig) -> dict:
@@ -53,6 +53,10 @@ def run(config: FineTuneConfig) -> dict[str, float]:
     (config.report_dir / "run_config.json").write_text(
         json.dumps(_config_payload(config), indent=2) + "\n"
     )
+    training_plan = optimization_plan(len(dataset["train"]), config)
+    (config.report_dir / "optimization_plan.json").write_text(
+        json.dumps(training_plan, indent=2) + "\n"
+    )
 
     model = build_lora_model(
         model_name=config.model_name,
@@ -87,6 +91,7 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         "dataset_profile": dataset_profile,
         "trainable_fraction": adapter_report["trainable_fraction"],
         "trainable_parameters": adapter_report["trainable_parameters"],
+        "optimization_plan": training_plan,
         **metrics,
     }
     (config.report_dir / "run_summary.json").write_text(

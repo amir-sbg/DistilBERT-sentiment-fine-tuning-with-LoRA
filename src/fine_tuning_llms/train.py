@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from inspect import signature
 
@@ -14,6 +15,39 @@ from transformers import (
 )
 
 from .config import FineTuneConfig
+
+
+def optimization_plan(
+    train_examples: int,
+    config: FineTuneConfig,
+    world_size: int = 1,
+) -> dict[str, int | float]:
+    if train_examples < 1:
+        raise ValueError("train_examples must be at least 1")
+    if world_size < 1:
+        raise ValueError("world_size must be at least 1")
+
+    examples_per_micro_batch = config.train_batch_size * world_size
+    micro_batches_per_epoch = math.ceil(train_examples / examples_per_micro_batch)
+    optimizer_steps_per_epoch = math.ceil(
+        micro_batches_per_epoch / config.gradient_accumulation_steps
+    )
+    total_optimizer_steps = math.ceil(optimizer_steps_per_epoch * config.epochs)
+    return {
+        "train_examples": train_examples,
+        "world_size": world_size,
+        "per_device_batch_size": config.train_batch_size,
+        "gradient_accumulation_steps": config.gradient_accumulation_steps,
+        "effective_batch_size": (
+            config.train_batch_size
+            * config.gradient_accumulation_steps
+            * world_size
+        ),
+        "micro_batches_per_epoch": micro_batches_per_epoch,
+        "optimizer_steps_per_epoch": optimizer_steps_per_epoch,
+        "total_optimizer_steps": total_optimizer_steps,
+        "warmup_steps": math.ceil(total_optimizer_steps * config.warmup_ratio),
+    }
 
 
 def build_training_arguments(config: FineTuneConfig) -> TrainingArguments:

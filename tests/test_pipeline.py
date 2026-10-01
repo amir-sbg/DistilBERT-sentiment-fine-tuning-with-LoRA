@@ -28,6 +28,7 @@ from fine_tuning_llms.evaluate import (
 )
 from fine_tuning_llms.inference import predict
 from fine_tuning_llms.model import parameter_report
+from fine_tuning_llms.train import optimization_plan
 
 
 class TinyTokenizer:
@@ -334,6 +335,23 @@ def test_parameter_report_separates_adapter_and_head_weights() -> None:
     assert report["frozen_parameters"] == 6
     assert report["trainable_lora_parameters"] == 2
     assert report["trainable_head_parameters"] == 4
+
+
+def test_optimization_plan_accounts_for_gradient_accumulation() -> None:
+    config = FineTuneConfig(
+        train_batch_size=8,
+        gradient_accumulation_steps=4,
+        epochs=2.0,
+        warmup_ratio=0.1,
+    )
+
+    report = optimization_plan(100, config)
+
+    assert report["effective_batch_size"] == 32
+    assert report["micro_batches_per_epoch"] == 13
+    assert report["optimizer_steps_per_epoch"] == 4
+    assert report["total_optimizer_steps"] == 8
+    assert report["warmup_steps"] == 1
 
 
 def test_inference_rejects_empty_text() -> None:
