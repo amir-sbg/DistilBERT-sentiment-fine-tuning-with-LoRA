@@ -7,8 +7,11 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     brier_score_loss,
     f1_score,
+    log_loss,
+    matthews_corrcoef,
     precision_score,
     recall_score,
 )
@@ -41,13 +44,21 @@ def classification_metrics(prediction: EvalPrediction) -> dict[str, float]:
     if not set(np.unique(labels)).issubset({0, 1}):
         raise ValueError("labels must be binary")
     predicted_labels = np.argmax(logits, axis=-1)
+    positive_probabilities = _positive_probabilities(logits)
     return {
         "accuracy": float(accuracy_score(labels, predicted_labels)),
+        "balanced_accuracy": float(
+            balanced_accuracy_score(labels, predicted_labels)
+        ),
         "precision": float(
             precision_score(labels, predicted_labels, zero_division=0)
         ),
         "recall": float(recall_score(labels, predicted_labels, zero_division=0)),
         "f1": float(f1_score(labels, predicted_labels, zero_division=0)),
+        "matthews_correlation": float(matthews_corrcoef(labels, predicted_labels)),
+        "log_loss": float(
+            log_loss(labels, positive_probabilities, labels=[0, 1])
+        ),
     }
 
 

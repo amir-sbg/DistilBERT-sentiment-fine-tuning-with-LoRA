@@ -145,9 +145,12 @@ def test_classification_metrics_are_consistent() -> None:
     metrics = classification_metrics(prediction)
     assert metrics == {
         "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
         "precision": 1.0,
         "recall": 1.0,
         "f1": 1.0,
+        "matthews_correlation": 1.0,
+        "log_loss": pytest.approx(0.180123, abs=1e-6),
     }
 
 
