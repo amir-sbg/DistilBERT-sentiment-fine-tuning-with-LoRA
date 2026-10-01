@@ -22,6 +22,7 @@ from fine_tuning_llms.evaluate import (
     confident_error_records,
     confidence_slices,
     evaluate_test_set,
+    selective_risk_report,
     select_threshold_with_recall_floor,
     threshold_sweep,
 )
@@ -248,6 +249,18 @@ def test_confidence_slices_separate_error_bands() -> None:
     assert by_slice["high"]["error_rate"] == 0.5
 
 
+def test_selective_risk_removes_uncertain_errors() -> None:
+    report = selective_risk_report(
+        labels=np.array([0, 1, 1, 0]),
+        positive_probabilities=np.array([0.10, 0.90, 0.49, 0.80]),
+        coverages=(1.0, 0.5),
+    )
+
+    assert report["points"][0]["selective_risk"] == 0.5
+    assert report["points"][1]["selective_risk"] == 0.0
+    assert report["points"][1]["retained"] == 2
+
+
 def test_confident_error_records_are_ranked_by_confidence() -> None:
     rows = confident_error_records(
         labels=np.array([0, 1, 1, 0]),
@@ -281,6 +294,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     recall_floor = json.loads((tmp_path / "threshold_recall_floor.json").read_text())
     calibration = json.loads((tmp_path / "calibration_report.json").read_text())
     confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
+    selective_risk = json.loads((tmp_path / "selective_risk.json").read_text())
     confident_errors = json.loads((tmp_path / "confident_errors.json").read_text())
     predictions = json.loads((tmp_path / "test_predictions.json").read_text())
     assert metrics["test_loss"] == 0.2
@@ -291,6 +305,8 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     assert len(sweep) == 3
     assert calibration["n_examples"] == 3
     assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
+    assert "area_under_risk_coverage" in selective_risk
+    assert "test_risk_at_half_coverage" in metrics
     assert metrics["test_confident_error_count"] == len(confident_errors)
     assert predictions[0]["predicted_label"] == 0
 

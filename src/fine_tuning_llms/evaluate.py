@@ -182,6 +182,49 @@ def confidence_slices(
     return rows
 
 
+def selective_risk_report(
+    labels,
+    positive_probabilities,
+    coverages: tuple[float, ...] = (1.0, 0.9, 0.75, 0.5),
+) -> dict[str, float | int | list[dict[str, float | int]]]:
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
+    if not coverages or any(not 0.0 < coverage <= 1.0 for coverage in coverages):
+        raise ValueError("coverages must be in (0, 1]")
+
+    predicted_labels = (probabilities >= 0.5).astype(int)
+    confidence = np.maximum(probabilities, 1.0 - probabilities)
+    order = np.argsort(-confidence, kind="stable")
+    ordered_errors = (predicted_labels[order] != labels[order]).astype(float)
+    prefix_risk = np.cumsum(ordered_errors) / np.arange(1, len(labels) + 1)
+
+    points = []
+    for target_coverage in coverages:
+        retained = min(
+            len(labels),
+            max(1, int(np.ceil(target_coverage * len(labels)))),
+        )
+        selected = order[:retained]
+        errors = int((predicted_labels[selected] != labels[selected]).sum())
+        risk = errors / retained
+        points.append(
+            {
+                "target_coverage": float(target_coverage),
+                "coverage": float(retained / len(labels)),
+                "retained": retained,
+                "errors": errors,
+                "selective_accuracy": float(1.0 - risk),
+                "selective_risk": float(risk),
+                "minimum_confidence": float(confidence[selected].min()),
+            }
+        )
+
+    return {
+        "n_examples": int(len(labels)),
+        "area_under_risk_coverage": float(prefix_risk.mean()),
+        "points": points,
+    }
+
+
 def threshold_sweep(
     labels,
     positive_probabilities,
@@ -323,6 +366,7 @@ def evaluate_test_set(
     sweep = threshold_sweep(output.label_ids, probabilities, thresholds)
     best_threshold = max(sweep, key=lambda row: (row["f1"], row["accuracy"]))
     calibration = calibration_report(output.label_ids, probabilities)
+    selective_risk = selective_risk_report(output.label_ids, probabilities)
     recall_floor_report = None
     if minimum_recall is not None:
         recall_floor_report = select_threshold_with_recall_floor(
@@ -354,6 +398,12 @@ def evaluate_test_set(
             ],
             "test_high_confidence_error_rate": high_confidence["error_rate"],
             "test_confident_error_count": len(confident_errors),
+            "test_area_under_risk_coverage": selective_risk[
+                "area_under_risk_coverage"
+            ],
+            "test_risk_at_half_coverage": selective_risk["points"][-1][
+                "selective_risk"
+            ],
         }
     )
     if recall_floor_report is not None:
@@ -377,6 +427,9 @@ def evaluate_test_set(
     )
     (report_dir / "confidence_slices.json").write_text(
         json.dumps(confidence, indent=2) + "\n"
+    )
+    (report_dir / "selective_risk.json").write_text(
+        json.dumps(selective_risk, indent=2) + "\n"
     )
     (report_dir / "confident_errors.json").write_text(
         json.dumps(confident_errors, indent=2) + "\n"
