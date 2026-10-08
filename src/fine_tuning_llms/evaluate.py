@@ -225,6 +225,82 @@ def selective_risk_report(
     }
 
 
+def bootstrap_metric_intervals(
+    labels,
+    positive_probabilities,
+    threshold: float = 0.5,
+    samples: int = 500,
+    confidence: float = 0.95,
+    seed: int = 42,
+) -> dict[str, object]:
+    """Estimate uncertainty for threshold and probability metrics."""
+
+    if samples < 1:
+        raise ValueError("samples must be positive")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError("confidence must be between zero and one")
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
+    threshold_metrics(labels, probabilities, threshold)
+
+    generator = np.random.default_rng(seed)
+    metric_names = (
+        "accuracy",
+        "precision",
+        "recall",
+        "specificity",
+        "f1",
+        "positive_rate",
+        "brier_score",
+        "log_loss",
+    )
+    collected = {name: [] for name in metric_names}
+    used_samples = 0
+    skipped_samples = 0
+    attempts = 0
+    while used_samples < samples and attempts < samples * 20:
+        attempts += 1
+        indices = generator.integers(0, len(labels), size=len(labels))
+        sample_labels = labels[indices]
+        if len(np.unique(sample_labels)) < 2:
+            skipped_samples += 1
+            continue
+        sample_probabilities = probabilities[indices]
+        threshold_report = threshold_metrics(
+            sample_labels,
+            sample_probabilities,
+            threshold,
+        )
+        threshold_report["brier_score"] = float(
+            brier_score_loss(sample_labels, sample_probabilities)
+        )
+        threshold_report["log_loss"] = float(
+            log_loss(sample_labels, sample_probabilities, labels=[0, 1])
+        )
+        for name in metric_names:
+            collected[name].append(float(threshold_report[name]))
+        used_samples += 1
+
+    if used_samples == 0:
+        raise ValueError("could not draw a bootstrap sample containing both labels")
+    alpha = (1.0 - confidence) / 2.0
+    intervals = {
+        name: {
+            "mean": float(np.mean(values)),
+            "lower": float(np.quantile(values, alpha)),
+            "upper": float(np.quantile(values, 1.0 - alpha)),
+        }
+        for name, values in collected.items()
+    }
+    return {
+        "samples": samples,
+        "used_samples": used_samples,
+        "skipped_degenerate_samples": skipped_samples,
+        "confidence": confidence,
+        "threshold": float(threshold),
+        "metrics": intervals,
+    }
+
+
 def threshold_sweep(
     labels,
     positive_probabilities,
@@ -367,6 +443,11 @@ def evaluate_test_set(
     best_threshold = max(sweep, key=lambda row: (row["f1"], row["accuracy"]))
     calibration = calibration_report(output.label_ids, probabilities)
     selective_risk = selective_risk_report(output.label_ids, probabilities)
+    intervals = bootstrap_metric_intervals(
+        output.label_ids,
+        probabilities,
+        threshold=best_threshold["threshold"],
+    )
     recall_floor_report = None
     if minimum_recall is not None:
         recall_floor_report = select_threshold_with_recall_floor(
@@ -404,6 +485,8 @@ def evaluate_test_set(
             "test_risk_at_half_coverage": selective_risk["points"][-1][
                 "selective_risk"
             ],
+            "test_f1_ci95_low": intervals["metrics"]["f1"]["lower"],
+            "test_f1_ci95_high": intervals["metrics"]["f1"]["upper"],
         }
     )
     if recall_floor_report is not None:
@@ -430,6 +513,9 @@ def evaluate_test_set(
     )
     (report_dir / "selective_risk.json").write_text(
         json.dumps(selective_risk, indent=2) + "\n"
+    )
+    (report_dir / "metric_intervals.json").write_text(
+        json.dumps(intervals, indent=2) + "\n"
     )
     (report_dir / "confident_errors.json").write_text(
         json.dumps(confident_errors, indent=2) + "\n"

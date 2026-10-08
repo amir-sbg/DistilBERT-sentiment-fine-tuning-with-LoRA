@@ -17,6 +17,7 @@ from fine_tuning_llms.data import (
     validate_dataset,
 )
 from fine_tuning_llms.evaluate import (
+    bootstrap_metric_intervals,
     calibration_report,
     classification_metrics,
     confident_error_records,
@@ -262,6 +263,20 @@ def test_selective_risk_removes_uncertain_errors() -> None:
     assert report["points"][1]["retained"] == 2
 
 
+def test_bootstrap_intervals_capture_selected_threshold_uncertainty() -> None:
+    report = bootstrap_metric_intervals(
+        labels=np.array([0, 0, 1, 1, 0, 1]),
+        positive_probabilities=np.array([0.1, 0.4, 0.6, 0.9, 0.2, 0.8]),
+        threshold=0.5,
+        samples=100,
+        seed=9,
+    )
+
+    assert report["used_samples"] == 100
+    assert report["threshold"] == 0.5
+    assert report["metrics"]["f1"]["lower"] <= report["metrics"]["f1"]["upper"]
+
+
 def test_confident_error_records_are_ranked_by_confidence() -> None:
     rows = confident_error_records(
         labels=np.array([0, 1, 1, 0]),
@@ -296,6 +311,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     calibration = json.loads((tmp_path / "calibration_report.json").read_text())
     confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
     selective_risk = json.loads((tmp_path / "selective_risk.json").read_text())
+    intervals = json.loads((tmp_path / "metric_intervals.json").read_text())
     confident_errors = json.loads((tmp_path / "confident_errors.json").read_text())
     predictions = json.loads((tmp_path / "test_predictions.json").read_text())
     assert metrics["test_loss"] == 0.2
@@ -308,6 +324,8 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
     assert "area_under_risk_coverage" in selective_risk
     assert "test_risk_at_half_coverage" in metrics
+    assert metrics["test_f1_ci95_low"] <= metrics["test_f1_ci95_high"]
+    assert intervals["threshold"] == metrics["test_best_threshold"]
     assert metrics["test_confident_error_count"] == len(confident_errors)
     assert predictions[0]["predicted_label"] == 0
 
