@@ -133,9 +133,49 @@ def calibration_report(
         "bins": bins,
         "n_examples": int(len(labels)),
         "brier_score": float(brier_score_loss(labels, probabilities)),
+        "brier_decomposition": brier_decomposition(
+            labels,
+            probabilities,
+            bins=bins,
+        ),
         "expected_calibration_error": float(expected_calibration_error),
         "maximum_calibration_error": float(maximum_calibration_error),
         "table": rows,
+    }
+
+
+def brier_decomposition(
+    labels,
+    positive_probabilities,
+    bins: int = 10,
+) -> dict[str, float]:
+    """Split the Brier score into reliability, resolution, and uncertainty."""
+
+    if bins < 2:
+        raise ValueError("bins must be at least 2")
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    assignments = np.minimum(np.digitize(probabilities, edges[1:-1]), bins - 1)
+    base_rate = float(labels.mean())
+    reliability = 0.0
+    resolution = 0.0
+    for index in range(bins):
+        mask = assignments == index
+        count = int(mask.sum())
+        if not count:
+            continue
+        weight = count / len(labels)
+        bin_probability = float(probabilities[mask].mean())
+        bin_rate = float(labels[mask].mean())
+        reliability += weight * (bin_probability - bin_rate) ** 2
+        resolution += weight * (bin_rate - base_rate) ** 2
+
+    uncertainty = base_rate * (1.0 - base_rate)
+    return {
+        "reliability": float(reliability),
+        "resolution": float(resolution),
+        "uncertainty": float(uncertainty),
+        "decomposed_brier_score": float(uncertainty - resolution + reliability),
     }
 
 

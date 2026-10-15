@@ -17,6 +17,7 @@ from fine_tuning_llms.data import (
     validate_dataset,
 )
 from fine_tuning_llms.evaluate import (
+    brier_decomposition,
     bootstrap_metric_intervals,
     calibration_report,
     classification_metrics,
@@ -235,7 +236,22 @@ def test_calibration_report_tracks_probability_reliability() -> None:
 
     assert report["brier_score"] == pytest.approx(0.05)
     assert report["expected_calibration_error"] == pytest.approx(0.20)
+    assert report["brier_decomposition"]["reliability"] == pytest.approx(0.04)
+    assert report["brier_decomposition"]["resolution"] == pytest.approx(0.25)
     assert len(report["table"]) == 2
+
+
+def test_brier_decomposition_rewards_resolved_probability_groups() -> None:
+    report = brier_decomposition(
+        labels=np.array([0, 0, 1, 1]),
+        positive_probabilities=np.array([0.05, 0.15, 0.85, 0.95]),
+        bins=2,
+    )
+
+    assert report["uncertainty"] == pytest.approx(0.25)
+    assert report["resolution"] == pytest.approx(0.25)
+    assert report["reliability"] == pytest.approx(0.01)
+    assert report["decomposed_brier_score"] == pytest.approx(0.01)
 
 
 def test_confidence_slices_separate_error_bands() -> None:
