@@ -25,6 +25,7 @@ from fine_tuning_llms.evaluate import (
     confidence_slices,
     evaluate_test_set,
     selective_risk_report,
+    select_threshold_by_cost,
     select_threshold_with_recall_floor,
     threshold_sweep,
     uncertainty_summary,
@@ -219,6 +220,20 @@ def test_select_threshold_with_recall_floor_falls_back_to_highest_recall() -> No
     assert "no threshold satisfied" in result["selection_reason"]
 
 
+def test_cost_sensitive_threshold_penalizes_false_negatives() -> None:
+    result = select_threshold_by_cost(
+        labels=np.array([0, 0, 1, 1]),
+        positive_probabilities=np.array([0.20, 0.55, 0.45, 0.80]),
+        thresholds=(0.40, 0.60),
+        false_positive_cost=1.0,
+        false_negative_cost=4.0,
+    )
+
+    assert result["threshold"] == 0.4
+    assert result["false_negative"] == 0
+    assert result["cost_per_example"] == 0.25
+
+
 def test_threshold_sweep_rejects_probability_range_errors() -> None:
     with pytest.raises(ValueError, match="between 0 and 1"):
         threshold_sweep(
@@ -336,6 +351,9 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     )
 
     sweep = json.loads((tmp_path / "threshold_sweep.json").read_text())
+    cost_selection = json.loads(
+        (tmp_path / "threshold_cost_selection.json").read_text()
+    )
     recall_floor = json.loads((tmp_path / "threshold_recall_floor.json").read_text())
     calibration = json.loads((tmp_path / "calibration_report.json").read_text())
     confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
@@ -350,6 +368,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     assert recall_floor["minimum_recall"] == 0.5
     assert "test_expected_calibration_error" in metrics
     assert len(sweep) == 3
+    assert metrics["test_cost_selected_threshold"] == cost_selection["threshold"]
     assert calibration["n_examples"] == 3
     assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
     assert metrics["test_mean_entropy_bits"] == uncertainty["mean_entropy_bits"]
@@ -369,6 +388,11 @@ def test_fine_tuning_config_rejects_invalid_values() -> None:
 def test_fine_tuning_config_rejects_bad_decision_thresholds() -> None:
     with pytest.raises(ValueError, match="decision_thresholds"):
         FineTuneConfig(decision_thresholds=(0.5, 1.2))
+
+
+def test_fine_tuning_config_rejects_empty_cost_model() -> None:
+    with pytest.raises(ValueError, match="at least one classification cost"):
+        FineTuneConfig(false_positive_cost=0.0, false_negative_cost=0.0)
 
 
 def test_fine_tuning_config_accepts_custom_lora_targets() -> None:

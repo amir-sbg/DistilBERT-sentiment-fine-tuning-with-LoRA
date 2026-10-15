@@ -47,7 +47,7 @@ python -m fine_tuning_llms.pipeline \
   --report-dir reports/imdb-smoke
 ```
 
-Set `--minimum-recall 0.90` when the deployment threshold must satisfy a minimum positive-class recall.
+Set `--minimum-recall 0.90` to report thresholds that satisfy a minimum positive-class recall. For asymmetric decisions, `--false-positive-cost` and `--false-negative-cost` compare the measured cost of false positives and false negatives across the threshold sweep.
 
 ## Inference
 
@@ -86,6 +86,7 @@ reports/
 ├── metric_intervals.json
 ├── confident_errors.json
 ├── threshold_sweep.json
+├── threshold_cost_selection.json
 └── threshold_recall_floor.json
 ```
 

@@ -409,6 +409,49 @@ def select_threshold_with_recall_floor(
     }
 
 
+def select_threshold_by_cost(
+    labels,
+    positive_probabilities,
+    thresholds: tuple[float, ...],
+    false_positive_cost: float = 1.0,
+    false_negative_cost: float = 1.0,
+) -> dict[str, float | int | str]:
+    """Choose the threshold with the lowest user-defined classification cost."""
+
+    if false_positive_cost < 0 or false_negative_cost < 0:
+        raise ValueError("classification costs must not be negative")
+    if false_positive_cost == 0 and false_negative_cost == 0:
+        raise ValueError("at least one classification cost must be positive")
+    rows = threshold_sweep(labels, positive_probabilities, thresholds)
+    costed_rows = []
+    for row in rows:
+        total_cost = (
+            row["false_positive"] * false_positive_cost
+            + row["false_negative"] * false_negative_cost
+        )
+        costed_rows.append(
+            {
+                **row,
+                "total_cost": float(total_cost),
+                "cost_per_example": float(total_cost / len(labels)),
+            }
+        )
+    selected = min(
+        costed_rows,
+        key=lambda row: (
+            row["total_cost"],
+            -row["f1"],
+            abs(row["threshold"] - 0.5),
+        ),
+    )
+    return {
+        **selected,
+        "false_positive_cost": float(false_positive_cost),
+        "false_negative_cost": float(false_negative_cost),
+        "selection_reason": "selected minimum expected classification cost",
+    }
+
+
 def prediction_records(labels, positive_probabilities) -> list[dict[str, float | int]]:
     labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
     predicted_labels = (probabilities >= 0.5).astype(int)
@@ -503,6 +546,8 @@ def evaluate_test_set(
     report_dir: Path,
     thresholds: tuple[float, ...] = (0.5,),
     minimum_recall: float | None = None,
+    false_positive_cost: float = 1.0,
+    false_negative_cost: float = 1.0,
 ) -> dict[str, float]:
     output = trainer.predict(
         test_dataset=test_dataset,
@@ -515,6 +560,13 @@ def evaluate_test_set(
     probabilities = _positive_probabilities(output.predictions)
     sweep = threshold_sweep(output.label_ids, probabilities, thresholds)
     best_threshold = max(sweep, key=lambda row: (row["f1"], row["accuracy"]))
+    cost_selection = select_threshold_by_cost(
+        output.label_ids,
+        probabilities,
+        thresholds,
+        false_positive_cost=false_positive_cost,
+        false_negative_cost=false_negative_cost,
+    )
     calibration = calibration_report(output.label_ids, probabilities)
     selective_risk = selective_risk_report(output.label_ids, probabilities)
     intervals = bootstrap_metric_intervals(
@@ -552,6 +604,8 @@ def evaluate_test_set(
             "test_mean_positive_probability": float(np.mean(probabilities)),
             "test_best_threshold": best_threshold["threshold"],
             "test_best_threshold_f1": best_threshold["f1"],
+            "test_cost_selected_threshold": cost_selection["threshold"],
+            "test_cost_per_example": cost_selection["cost_per_example"],
             "test_brier_score": calibration["brier_score"],
             "test_expected_calibration_error": calibration[
                 "expected_calibration_error"
@@ -581,6 +635,9 @@ def evaluate_test_set(
     )
     (report_dir / "threshold_sweep.json").write_text(
         json.dumps(sweep, indent=2) + "\n"
+    )
+    (report_dir / "threshold_cost_selection.json").write_text(
+        json.dumps(cost_selection, indent=2) + "\n"
     )
     if recall_floor_report is not None:
         (report_dir / "threshold_recall_floor.json").write_text(

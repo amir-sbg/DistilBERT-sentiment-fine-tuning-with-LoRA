@@ -30,6 +30,8 @@ class FineTuneConfig:
     max_test_samples: int | None = None
     decision_thresholds: tuple[float, ...] = (0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65)
     minimum_recall: float | None = None
+    false_positive_cost: float = 1.0
+    false_negative_cost: float = 1.0
 
     def __post_init__(self) -> None:
         if self.max_length < 1:
@@ -66,6 +68,10 @@ class FineTuneConfig:
             raise ValueError("decision_thresholds must be between 0 and 1")
         if self.minimum_recall is not None and not 0 < self.minimum_recall <= 1:
             raise ValueError("minimum_recall must be in (0, 1]")
+        if self.false_positive_cost < 0 or self.false_negative_cost < 0:
+            raise ValueError("classification costs must not be negative")
+        if self.false_positive_cost == 0 and self.false_negative_cost == 0:
+            raise ValueError("at least one classification cost must be positive")
 
 
 def ensure_output_directories(config: FineTuneConfig) -> None:

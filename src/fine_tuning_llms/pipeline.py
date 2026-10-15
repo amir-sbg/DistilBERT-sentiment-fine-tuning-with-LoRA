@@ -83,6 +83,8 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         report_dir=config.report_dir,
         thresholds=config.decision_thresholds,
         minimum_recall=config.minimum_recall,
+        false_positive_cost=config.false_positive_cost,
+        false_negative_cost=config.false_negative_cost,
     )
     summary = {
         "model_name": config.model_name,
@@ -133,6 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=[0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65],
     )
     parser.add_argument("--minimum-recall", type=float)
+    parser.add_argument("--false-positive-cost", type=float, default=1.0)
+    parser.add_argument("--false-negative-cost", type=float, default=1.0)
     return parser
 
 
