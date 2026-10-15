@@ -27,6 +27,7 @@ from fine_tuning_llms.evaluate import (
     selective_risk_report,
     select_threshold_with_recall_floor,
     threshold_sweep,
+    uncertainty_summary,
 )
 from fine_tuning_llms.inference import predict
 from fine_tuning_llms.model import parameter_report
@@ -267,6 +268,18 @@ def test_confidence_slices_separate_error_bands() -> None:
     assert by_slice["high"]["error_rate"] == 0.5
 
 
+def test_uncertainty_summary_separates_entropy_from_decision_margin() -> None:
+    report = uncertainty_summary(
+        labels=np.array([0, 1, 1, 0]),
+        positive_probabilities=np.array([0.05, 0.55, 0.95, 0.95]),
+    )
+
+    assert report["n_examples"] == 4
+    assert report["low_margin_rate"] == 0.25
+    assert report["mean_error_entropy_bits"] < report["mean_correct_entropy_bits"]
+    assert 0.0 < report["mean_entropy_bits"] < 1.0
+
+
 def test_selective_risk_removes_uncertain_errors() -> None:
     report = selective_risk_report(
         labels=np.array([0, 1, 1, 0]),
@@ -326,6 +339,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     recall_floor = json.loads((tmp_path / "threshold_recall_floor.json").read_text())
     calibration = json.loads((tmp_path / "calibration_report.json").read_text())
     confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
+    uncertainty = json.loads((tmp_path / "uncertainty_summary.json").read_text())
     selective_risk = json.loads((tmp_path / "selective_risk.json").read_text())
     intervals = json.loads((tmp_path / "metric_intervals.json").read_text())
     confident_errors = json.loads((tmp_path / "confident_errors.json").read_text())
@@ -338,6 +352,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     assert len(sweep) == 3
     assert calibration["n_examples"] == 3
     assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
+    assert metrics["test_mean_entropy_bits"] == uncertainty["mean_entropy_bits"]
     assert "area_under_risk_coverage" in selective_risk
     assert "test_risk_at_half_coverage" in metrics
     assert metrics["test_f1_ci95_low"] <= metrics["test_f1_ci95_high"]

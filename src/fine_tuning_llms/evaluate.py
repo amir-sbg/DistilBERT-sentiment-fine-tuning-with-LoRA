@@ -222,6 +222,40 @@ def confidence_slices(
     return rows
 
 
+def uncertainty_summary(
+    labels,
+    positive_probabilities,
+    threshold: float = 0.5,
+) -> dict[str, float | int]:
+    """Summarize entropy and decision margin for correct and incorrect predictions."""
+
+    if threshold <= 0 or threshold >= 1:
+        raise ValueError("threshold must be between 0 and 1")
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
+    clipped = np.clip(probabilities, 1e-12, 1.0 - 1e-12)
+    entropy = -(
+        clipped * np.log2(clipped)
+        + (1.0 - clipped) * np.log2(1.0 - clipped)
+    )
+    margin = np.abs(probabilities - threshold)
+    predicted_labels = (probabilities >= threshold).astype(int)
+    errors = predicted_labels != labels
+
+    return {
+        "n_examples": int(len(labels)),
+        "mean_entropy_bits": float(entropy.mean()),
+        "p90_entropy_bits": float(np.quantile(entropy, 0.90)),
+        "mean_decision_margin": float(margin.mean()),
+        "low_margin_rate": float(np.mean(margin < 0.10)),
+        "mean_correct_entropy_bits": float(entropy[~errors].mean())
+        if np.any(~errors)
+        else 0.0,
+        "mean_error_entropy_bits": float(entropy[errors].mean())
+        if np.any(errors)
+        else 0.0,
+    }
+
+
 def selective_risk_report(
     labels,
     positive_probabilities,
@@ -501,6 +535,11 @@ def evaluate_test_set(
         probabilities,
         threshold=best_threshold["threshold"],
     )
+    uncertainty = uncertainty_summary(
+        output.label_ids,
+        probabilities,
+        threshold=best_threshold["threshold"],
+    )
     confident_errors = confident_error_records(
         output.label_ids,
         probabilities,
@@ -518,6 +557,8 @@ def evaluate_test_set(
                 "expected_calibration_error"
             ],
             "test_high_confidence_error_rate": high_confidence["error_rate"],
+            "test_mean_entropy_bits": uncertainty["mean_entropy_bits"],
+            "test_low_margin_rate": uncertainty["low_margin_rate"],
             "test_confident_error_count": len(confident_errors),
             "test_area_under_risk_coverage": selective_risk[
                 "area_under_risk_coverage"
@@ -550,6 +591,9 @@ def evaluate_test_set(
     )
     (report_dir / "confidence_slices.json").write_text(
         json.dumps(confidence, indent=2) + "\n"
+    )
+    (report_dir / "uncertainty_summary.json").write_text(
+        json.dumps(uncertainty, indent=2) + "\n"
     )
     (report_dir / "selective_risk.json").write_text(
         json.dumps(selective_risk, indent=2) + "\n"

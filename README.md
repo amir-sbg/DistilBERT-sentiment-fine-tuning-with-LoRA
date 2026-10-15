@@ -11,7 +11,7 @@ The workflow keeps validation and test data separate, selects the best checkpoin
 3. Add LoRA adapters to DistilBERT’s `q_lin` and `v_lin` projections.
 4. Fine-tune with `Trainer`, AdamW, gradient accumulation, and early stopping.
 5. Save the adapter, classification head, tokenizer, configuration, and parameter report.
-6. Review calibration, confidence slices, selective risk, confident mistakes, and threshold trade-offs.
+6. Review calibration, predictive entropy, confidence slices, selective risk, confident mistakes, and threshold trade-offs.
 
 Default LoRA settings are rank 8, alpha 16, dropout 0.10, and a maximum sequence length of 256. The default learning rate is `2e-4`.
 
@@ -81,6 +81,7 @@ reports/
 ├── test_predictions.json
 ├── calibration_report.json
 ├── confidence_slices.json
+├── uncertainty_summary.json
 ├── selective_risk.json
 ├── metric_intervals.json
 ├── confident_errors.json
