@@ -12,6 +12,7 @@ from .data import (
     label_distribution,
     load_sentiment_dataset,
     split_sizes,
+    token_length_report,
     tokenize_dataset,
 )
 from .evaluate import classification_metrics, evaluate_test_set
@@ -43,6 +44,7 @@ def run(config: FineTuneConfig) -> dict[str, float]:
     dataset_profile = {
         "sizes": split_sizes(dataset),
         "label_distribution": label_distribution(dataset),
+        "token_lengths": token_length_report(tokenized_dataset, config.max_length),
     }
     (config.report_dir / "dataset_sizes.json").write_text(
         json.dumps(dataset_profile["sizes"], indent=2) + "\n"

@@ -150,3 +150,30 @@ def label_distribution(dataset: Mapping[str, Dataset]) -> dict[str, dict[str, fl
             "positive_rate": float(positives / rows) if rows else 0.0,
         }
     return report
+
+
+def token_length_report(
+    dataset: Mapping[str, Dataset],
+    max_length: int,
+) -> dict[str, dict[str, float | int]]:
+    """Describe sequence lengths after truncation, before dynamic padding."""
+
+    if max_length < 1:
+        raise ValueError("max_length must be at least 1")
+    report = {}
+    for split_name, split in dataset.items():
+        if "input_ids" not in split.column_names:
+            raise ValueError(f"{split_name} split is missing input_ids")
+        lengths = np.asarray([len(tokens) for tokens in split["input_ids"]], dtype=int)
+        if len(lengths) == 0:
+            raise ValueError(f"{split_name} split is empty")
+        report[split_name] = {
+            "rows": int(len(lengths)),
+            "mean_tokens": float(lengths.mean()),
+            "median_tokens": float(np.median(lengths)),
+            "p95_tokens": float(np.quantile(lengths, 0.95)),
+            "max_tokens": int(lengths.max()),
+            "at_length_limit": int(np.sum(lengths >= max_length)),
+            "at_length_limit_rate": float(np.mean(lengths >= max_length)),
+        }
+    return report

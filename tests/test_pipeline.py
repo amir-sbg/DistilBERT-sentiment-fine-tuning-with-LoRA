@@ -13,6 +13,7 @@ from fine_tuning_llms.config import FineTuneConfig
 from fine_tuning_llms.data import (
     _limit_split,
     label_distribution,
+    token_length_report,
     tokenize_dataset,
     validate_dataset,
 )
@@ -117,6 +118,23 @@ def test_tokenization_removes_raw_text() -> None:
     assert "text" not in tokenized["train"].column_names
     assert "input_ids" in tokenized["train"].column_names
     assert tokenized["train"][0]["input_ids"] == [0, 1]
+
+
+def test_token_length_report_tracks_truncation_pressure() -> None:
+    split = Dataset.from_dict(
+        {
+            "input_ids": [[1], [1, 2, 3], [1, 2, 3, 4]],
+            "attention_mask": [[1], [1, 1, 1], [1, 1, 1, 1]],
+            "label": [0, 1, 1],
+        }
+    )
+
+    report = token_length_report({"train": split}, max_length=4)["train"]
+
+    assert report["median_tokens"] == 3.0
+    assert report["max_tokens"] == 4
+    assert report["at_length_limit"] == 1
+    assert report["at_length_limit_rate"] == pytest.approx(1 / 3)
 
 
 def test_label_distribution_reports_each_split() -> None:
