@@ -2,7 +2,7 @@
 
 A parameter-efficient text-classification pipeline for adapting `distilbert-base-uncased` to IMDb movie reviews. It uses Hugging Face Datasets and Transformers, PyTorch, and PEFT to train LoRA adapters while keeping the base encoder frozen.
 
-The workflow keeps validation and test data separate, selects the best checkpoint by validation F1, and evaluates the held-out test set with balanced metrics, calibration and Brier decomposition, selective risk, bootstrap uncertainty, and decision-threshold diagnostics. Sample-limited runs preserve class balance, while sequence-length profiles expose how often reviews reach the truncation limit. Each run also records the effective batch size and expected optimizer schedule.
+The workflow keeps validation and test data separate, selects the best checkpoint by validation F1, and fits temperature scaling on validation logits before measuring calibrated test probabilities. Held-out evaluation covers balanced metrics, calibration and Brier decomposition, selective risk, bootstrap uncertainty, and decision-threshold diagnostics. Sample-limited runs preserve class balance, while sequence-length profiles expose how often reviews reach the truncation limit. Each run also records the effective batch size and expected optimizer schedule.
 
 ## Pipeline
 
@@ -80,6 +80,7 @@ reports/
 ├── test_metrics.json
 ├── test_predictions.json
 ├── calibration_report.json
+├── temperature_scaling.json
 ├── confidence_slices.json
 ├── uncertainty_summary.json
 ├── selective_risk.json

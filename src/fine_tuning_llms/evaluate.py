@@ -36,6 +36,101 @@ def _positive_probabilities(predictions) -> np.ndarray:
     return probabilities[:, 1]
 
 
+def temperature_scaling_report(
+    validation_logits,
+    validation_labels,
+    test_logits,
+    test_labels,
+    iterations: int = 80,
+) -> dict[str, float | int | dict[str, float | int]]:
+    """Fit one temperature on validation logits and evaluate it on test logits."""
+
+    if iterations < 10:
+        raise ValueError("iterations must be at least 10")
+    validation_values = _logits_array(validation_logits)
+    test_values = _logits_array(test_logits)
+    validation_labels = _validated_logit_labels(validation_labels, validation_values)
+    test_labels = _validated_logit_labels(test_labels, test_values)
+
+    def objective(log_temperature: float) -> float:
+        temperature = float(np.exp(log_temperature))
+        probabilities = _positive_probabilities(validation_values / temperature)
+        return float(log_loss(validation_labels, probabilities, labels=[0, 1]))
+
+    lower = float(np.log(0.05))
+    upper = float(np.log(10.0))
+    ratio = (np.sqrt(5.0) - 1.0) / 2.0
+    left = upper - ratio * (upper - lower)
+    right = lower + ratio * (upper - lower)
+    left_loss = objective(left)
+    right_loss = objective(right)
+    for _ in range(iterations):
+        if left_loss <= right_loss:
+            upper, right, right_loss = right, left, left_loss
+            left = upper - ratio * (upper - lower)
+            left_loss = objective(left)
+        else:
+            lower, left, left_loss = left, right, right_loss
+            right = lower + ratio * (upper - lower)
+            right_loss = objective(right)
+
+    candidates = [0.0, lower, upper, left, right]
+    best_log_temperature = min(candidates, key=objective)
+    temperature = float(np.exp(best_log_temperature))
+    validation_before = _positive_probabilities(validation_values)
+    validation_after = _positive_probabilities(validation_values / temperature)
+    test_before = _positive_probabilities(test_values)
+    test_after = _positive_probabilities(test_values / temperature)
+    validation_calibration_before = calibration_report(
+        validation_labels,
+        validation_before,
+    )
+    validation_calibration_after = calibration_report(
+        validation_labels,
+        validation_after,
+    )
+    test_calibration_before = calibration_report(test_labels, test_before)
+    test_calibration_after = calibration_report(test_labels, test_after)
+    return {
+        "temperature": temperature,
+        "validation": {
+            "n_examples": int(len(validation_labels)),
+            "log_loss_before": float(
+                log_loss(validation_labels, validation_before, labels=[0, 1])
+            ),
+            "log_loss_after": float(
+                log_loss(validation_labels, validation_after, labels=[0, 1])
+            ),
+            "ece_before": validation_calibration_before[
+                "expected_calibration_error"
+            ],
+            "ece_after": validation_calibration_after[
+                "expected_calibration_error"
+            ],
+        },
+        "test": {
+            "n_examples": int(len(test_labels)),
+            "log_loss_before": float(
+                log_loss(test_labels, test_before, labels=[0, 1])
+            ),
+            "log_loss_after": float(
+                log_loss(test_labels, test_after, labels=[0, 1])
+            ),
+            "ece_before": test_calibration_before["expected_calibration_error"],
+            "ece_after": test_calibration_after["expected_calibration_error"],
+        },
+    }
+
+
+def _validated_logit_labels(labels, logits: np.ndarray) -> np.ndarray:
+    values = np.asarray(labels, dtype=int)
+    if values.ndim != 1 or len(values) != len(logits):
+        raise ValueError("labels must be one-dimensional and match the logits")
+    if not set(np.unique(values)).issubset({0, 1}):
+        raise ValueError("labels must be binary")
+    return values
+
+
 def classification_metrics(prediction: EvalPrediction) -> dict[str, float]:
     logits = _logits_array(prediction.predictions)
     labels = np.asarray(prediction.label_ids)
@@ -548,6 +643,7 @@ def evaluate_test_set(
     minimum_recall: float | None = None,
     false_positive_cost: float = 1.0,
     false_negative_cost: float = 1.0,
+    calibration_dataset: Any | None = None,
 ) -> dict[str, float]:
     output = trainer.predict(
         test_dataset=test_dataset,
@@ -624,6 +720,25 @@ def evaluate_test_set(
             "test_f1_ci95_high": intervals["metrics"]["f1"]["upper"],
         }
     )
+    temperature_report = None
+    if calibration_dataset is not None:
+        validation_output = trainer.predict(
+            test_dataset=calibration_dataset,
+            metric_key_prefix="validation_calibration",
+        )
+        temperature_report = temperature_scaling_report(
+            validation_output.predictions,
+            validation_output.label_ids,
+            output.predictions,
+            output.label_ids,
+        )
+        serializable["test_temperature"] = temperature_report["temperature"]
+        serializable["test_temperature_scaled_log_loss"] = temperature_report[
+            "test"
+        ]["log_loss_after"]
+        serializable["test_temperature_scaled_ece"] = temperature_report[
+            "test"
+        ]["ece_after"]
     if recall_floor_report is not None:
         serializable["test_recall_floor_threshold"] = recall_floor_report["threshold"]
         serializable["test_recall_floor_f1"] = recall_floor_report["f1"]
@@ -646,6 +761,10 @@ def evaluate_test_set(
     (report_dir / "calibration_report.json").write_text(
         json.dumps(calibration, indent=2) + "\n"
     )
+    if temperature_report is not None:
+        (report_dir / "temperature_scaling.json").write_text(
+            json.dumps(temperature_report, indent=2) + "\n"
+        )
     (report_dir / "confidence_slices.json").write_text(
         json.dumps(confidence, indent=2) + "\n"
     )

@@ -29,6 +29,7 @@ from fine_tuning_llms.evaluate import (
     select_threshold_by_cost,
     select_threshold_with_recall_floor,
     threshold_sweep,
+    temperature_scaling_report,
     uncertainty_summary,
 )
 from fine_tuning_llms.inference import predict
@@ -275,6 +276,23 @@ def test_calibration_report_tracks_probability_reliability() -> None:
     assert len(report["table"]) == 2
 
 
+def test_temperature_scaling_reduces_validation_log_loss() -> None:
+    validation_logits = np.array(
+        [[4.0, 0.0], [0.0, 4.0], [0.0, 3.0], [3.0, 0.0]]
+    )
+    validation_labels = np.array([0, 0, 1, 1])
+
+    report = temperature_scaling_report(
+        validation_logits,
+        validation_labels,
+        validation_logits,
+        validation_labels,
+    )
+
+    assert report["temperature"] > 1.0
+    assert report["validation"]["log_loss_after"] < report["validation"]["log_loss_before"]
+
+
 def test_brier_decomposition_rewards_resolved_probability_groups() -> None:
     report = brier_decomposition(
         labels=np.array([0, 0, 1, 1]),
@@ -366,6 +384,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
         report_dir=tmp_path,
         thresholds=(0.40, 0.50, 0.60),
         minimum_recall=0.5,
+        calibration_dataset=tiny_dataset()["validation"],
     )
 
     sweep = json.loads((tmp_path / "threshold_sweep.json").read_text())
@@ -374,6 +393,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     )
     recall_floor = json.loads((tmp_path / "threshold_recall_floor.json").read_text())
     calibration = json.loads((tmp_path / "calibration_report.json").read_text())
+    temperature = json.loads((tmp_path / "temperature_scaling.json").read_text())
     confidence = json.loads((tmp_path / "confidence_slices.json").read_text())
     uncertainty = json.loads((tmp_path / "uncertainty_summary.json").read_text())
     selective_risk = json.loads((tmp_path / "selective_risk.json").read_text())
@@ -388,6 +408,8 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     assert len(sweep) == 3
     assert metrics["test_cost_selected_threshold"] == cost_selection["threshold"]
     assert calibration["n_examples"] == 3
+    assert metrics["test_temperature"] == temperature["temperature"]
+    assert "test_temperature_scaled_log_loss" in metrics
     assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
     assert metrics["test_mean_entropy_bits"] == uncertainty["mean_entropy_bits"]
     assert "area_under_risk_coverage" in selective_risk

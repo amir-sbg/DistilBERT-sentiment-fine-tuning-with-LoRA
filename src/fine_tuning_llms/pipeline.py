@@ -87,6 +87,7 @@ def run(config: FineTuneConfig) -> dict[str, float]:
         minimum_recall=config.minimum_recall,
         false_positive_cost=config.false_positive_cost,
         false_negative_cost=config.false_negative_cost,
+        calibration_dataset=tokenized_dataset["validation"],
     )
     summary = {
         "model_name": config.model_name,
