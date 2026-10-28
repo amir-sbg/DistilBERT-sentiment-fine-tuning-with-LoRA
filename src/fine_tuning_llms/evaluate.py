@@ -414,6 +414,10 @@ def selective_risk_report(
     order = np.argsort(-confidence, kind="stable")
     ordered_errors = (predicted_labels[order] != labels[order]).astype(float)
     prefix_risk = np.cumsum(ordered_errors) / np.arange(1, len(labels) + 1)
+    oracle_errors = np.sort(ordered_errors)
+    oracle_prefix_risk = np.cumsum(oracle_errors) / np.arange(1, len(labels) + 1)
+    area_under_risk_coverage = float(prefix_risk.mean())
+    optimal_area_under_risk_coverage = float(oracle_prefix_risk.mean())
 
     points = []
     for target_coverage in coverages:
@@ -438,7 +442,11 @@ def selective_risk_report(
 
     return {
         "n_examples": int(len(labels)),
-        "area_under_risk_coverage": float(prefix_risk.mean()),
+        "area_under_risk_coverage": area_under_risk_coverage,
+        "optimal_area_under_risk_coverage": optimal_area_under_risk_coverage,
+        "excess_area_under_risk_coverage": float(
+            area_under_risk_coverage - optimal_area_under_risk_coverage
+        ),
         "points": points,
     }
 
@@ -761,6 +769,9 @@ def evaluate_test_set(
             "test_confident_error_count": len(confident_errors),
             "test_area_under_risk_coverage": selective_risk[
                 "area_under_risk_coverage"
+            ],
+            "test_excess_area_under_risk_coverage": selective_risk[
+                "excess_area_under_risk_coverage"
             ],
             "test_risk_at_half_coverage": selective_risk["points"][-1][
                 "selective_risk"

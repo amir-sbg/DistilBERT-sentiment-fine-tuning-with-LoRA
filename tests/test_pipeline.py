@@ -358,6 +358,18 @@ def test_selective_risk_removes_uncertain_errors() -> None:
     assert report["points"][1]["retained"] == 2
 
 
+def test_selective_risk_reports_gap_from_oracle_ranking() -> None:
+    report = selective_risk_report(
+        labels=np.array([0, 0, 1, 1]),
+        positive_probabilities=np.array([0.95, 0.45, 0.55, 0.05]),
+    )
+
+    assert report["area_under_risk_coverage"] > report[
+        "optimal_area_under_risk_coverage"
+    ]
+    assert report["excess_area_under_risk_coverage"] > 0.0
+
+
 def test_bootstrap_intervals_capture_selected_threshold_uncertainty() -> None:
     report = bootstrap_metric_intervals(
         labels=np.array([0, 0, 1, 1, 0, 1]),
@@ -428,6 +440,7 @@ def test_evaluate_test_set_writes_threshold_reports(tmp_path) -> None:
     assert {row["slice"] for row in confidence} == {"low", "medium", "high"}
     assert metrics["test_mean_entropy_bits"] == uncertainty["mean_entropy_bits"]
     assert "area_under_risk_coverage" in selective_risk
+    assert "excess_area_under_risk_coverage" in selective_risk
     assert "test_risk_at_half_coverage" in metrics
     assert metrics["test_f1_ci95_low"] <= metrics["test_f1_ci95_high"]
     assert intervals["threshold"] == metrics["test_best_threshold"]
