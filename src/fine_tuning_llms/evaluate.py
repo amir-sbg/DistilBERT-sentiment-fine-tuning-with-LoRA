@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     balanced_accuracy_score,
     brier_score_loss,
     f1_score,
@@ -14,6 +15,7 @@ from sklearn.metrics import (
     matthews_corrcoef,
     precision_score,
     recall_score,
+    roc_auc_score,
 )
 from transformers import EvalPrediction, Trainer
 
@@ -151,6 +153,8 @@ def classification_metrics(prediction: EvalPrediction) -> dict[str, float]:
         "recall": float(recall_score(labels, predicted_labels, zero_division=0)),
         "f1": float(f1_score(labels, predicted_labels, zero_division=0)),
         "matthews_correlation": float(matthews_corrcoef(labels, predicted_labels)),
+        "roc_auc": float(roc_auc_score(labels, positive_probabilities)),
+        "average_precision": float(average_precision_score(labels, positive_probabilities)),
         "log_loss": float(
             log_loss(labels, positive_probabilities, labels=[0, 1])
         ),
