@@ -228,6 +228,7 @@ def calibration_report(
             }
         )
 
+    adaptive = adaptive_calibration_report(labels, probabilities, bins=bins)
     return {
         "bins": bins,
         "n_examples": int(len(labels)),
@@ -239,6 +240,50 @@ def calibration_report(
         ),
         "expected_calibration_error": float(expected_calibration_error),
         "maximum_calibration_error": float(maximum_calibration_error),
+        "adaptive_expected_calibration_error": adaptive[
+            "adaptive_expected_calibration_error"
+        ],
+        "adaptive_table": adaptive["table"],
+        "table": rows,
+    }
+
+
+def adaptive_calibration_report(
+    labels,
+    positive_probabilities,
+    bins: int = 10,
+) -> dict[str, float | int | list[dict[str, float | int]]]:
+    """Estimate calibration error with equal-count rather than fixed-width bins."""
+
+    if bins < 2:
+        raise ValueError("bins must be at least 2")
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
+    order = np.argsort(probabilities, kind="stable")
+    groups = np.array_split(order, min(bins, len(order)))
+    rows = []
+    error = 0.0
+    for index, group in enumerate(groups):
+        if len(group) == 0:
+            continue
+        mean_probability = float(probabilities[group].mean())
+        observed_positive_rate = float(labels[group].mean())
+        gap = abs(observed_positive_rate - mean_probability)
+        error += len(group) / len(labels) * gap
+        rows.append(
+            {
+                "bin": index,
+                "count": int(len(group)),
+                "minimum_probability": float(probabilities[group].min()),
+                "maximum_probability": float(probabilities[group].max()),
+                "mean_positive_probability": mean_probability,
+                "observed_positive_rate": observed_positive_rate,
+                "absolute_gap": float(gap),
+            }
+        )
+    return {
+        "bins": len(rows),
+        "n_examples": int(len(labels)),
+        "adaptive_expected_calibration_error": float(error),
         "table": rows,
     }
 

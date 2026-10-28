@@ -18,6 +18,7 @@ from fine_tuning_llms.data import (
     validate_dataset,
 )
 from fine_tuning_llms.evaluate import (
+    adaptive_calibration_report,
     brier_decomposition,
     bootstrap_metric_intervals,
     calibration_report,
@@ -273,9 +274,21 @@ def test_calibration_report_tracks_probability_reliability() -> None:
 
     assert report["brier_score"] == pytest.approx(0.05)
     assert report["expected_calibration_error"] == pytest.approx(0.20)
+    assert report["adaptive_expected_calibration_error"] >= 0.0
     assert report["brier_decomposition"]["reliability"] == pytest.approx(0.04)
     assert report["brier_decomposition"]["resolution"] == pytest.approx(0.25)
     assert len(report["table"]) == 2
+
+
+def test_adaptive_calibration_uses_balanced_probability_bins() -> None:
+    report = adaptive_calibration_report(
+        labels=np.array([0, 0, 0, 1, 1]),
+        positive_probabilities=np.array([0.05, 0.10, 0.20, 0.70, 0.90]),
+        bins=2,
+    )
+
+    assert [row["count"] for row in report["table"]] == [3, 2]
+    assert report["adaptive_expected_calibration_error"] == pytest.approx(0.15)
 
 
 def test_temperature_scaling_reduces_validation_log_loss() -> None:
