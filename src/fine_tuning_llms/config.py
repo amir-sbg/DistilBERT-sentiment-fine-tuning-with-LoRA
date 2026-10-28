@@ -17,6 +17,8 @@ class FineTuneConfig:
     gradient_accumulation_steps: int = 2
     learning_rate: float = 2e-4
     weight_decay: float = 0.01
+    label_smoothing_factor: float = 0.0
+    max_grad_norm: float = 1.0
     warmup_ratio: float = 0.10
     epochs: float = 1.0
     patience: int = 2
@@ -46,6 +48,10 @@ class FineTuneConfig:
             raise ValueError("learning_rate must be greater than 0")
         if self.weight_decay < 0:
             raise ValueError("weight_decay must not be negative")
+        if not 0 <= self.label_smoothing_factor < 1:
+            raise ValueError("label_smoothing_factor must be in [0, 1)")
+        if self.max_grad_norm <= 0:
+            raise ValueError("max_grad_norm must be greater than 0")
         if not 0 <= self.warmup_ratio < 1:
             raise ValueError("warmup_ratio must be between 0 and 1")
         if self.epochs <= 0:

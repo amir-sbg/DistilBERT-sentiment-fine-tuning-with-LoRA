@@ -47,6 +47,8 @@ def optimization_plan(
         "optimizer_steps_per_epoch": optimizer_steps_per_epoch,
         "total_optimizer_steps": total_optimizer_steps,
         "warmup_steps": math.ceil(total_optimizer_steps * config.warmup_ratio),
+        "label_smoothing_factor": config.label_smoothing_factor,
+        "max_grad_norm": config.max_grad_norm,
     }
 
 
@@ -59,6 +61,8 @@ def build_training_arguments(config: FineTuneConfig) -> TrainingArguments:
         "gradient_accumulation_steps": config.gradient_accumulation_steps,
         "num_train_epochs": config.epochs,
         "weight_decay": config.weight_decay,
+        "label_smoothing_factor": config.label_smoothing_factor,
+        "max_grad_norm": config.max_grad_norm,
         "warmup_ratio": config.warmup_ratio,
         "save_strategy": "epoch",
         "logging_strategy": "steps",

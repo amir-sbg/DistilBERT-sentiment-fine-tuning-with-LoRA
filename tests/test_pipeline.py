@@ -35,7 +35,7 @@ from fine_tuning_llms.evaluate import (
 )
 from fine_tuning_llms.inference import predict
 from fine_tuning_llms.model import parameter_report
-from fine_tuning_llms.train import optimization_plan
+from fine_tuning_llms.train import build_training_arguments, optimization_plan
 
 
 class TinyTokenizer:
@@ -493,6 +493,18 @@ def test_optimization_plan_accounts_for_gradient_accumulation() -> None:
     assert report["optimizer_steps_per_epoch"] == 4
     assert report["total_optimizer_steps"] == 8
     assert report["warmup_steps"] == 1
+
+
+def test_training_regularization_is_validated_and_forwarded() -> None:
+    config = FineTuneConfig(label_smoothing_factor=0.1, max_grad_norm=0.5)
+    arguments = build_training_arguments(config)
+
+    assert arguments.label_smoothing_factor == 0.1
+    assert arguments.max_grad_norm == 0.5
+    with pytest.raises(ValueError, match="label_smoothing_factor"):
+        FineTuneConfig(label_smoothing_factor=1.0)
+    with pytest.raises(ValueError, match="max_grad_norm"):
+        FineTuneConfig(max_grad_norm=0.0)
 
 
 def test_inference_rejects_empty_text() -> None:

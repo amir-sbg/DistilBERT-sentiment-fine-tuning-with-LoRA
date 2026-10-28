@@ -120,6 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gradient-accumulation-steps", type=int, default=2)
     parser.add_argument("--learning-rate", type=float, default=2e-4)
     parser.add_argument("--weight-decay", type=float, default=0.01)
+    parser.add_argument("--label-smoothing-factor", type=float, default=0.0)
+    parser.add_argument("--max-grad-norm", type=float, default=1.0)
     parser.add_argument("--warmup-ratio", type=float, default=0.10)
     parser.add_argument("--epochs", type=float, default=1.0)
     parser.add_argument("--patience", type=int, default=2)

@@ -2,14 +2,14 @@
 
 A parameter-efficient text-classification pipeline for adapting `distilbert-base-uncased` to IMDb movie reviews. It uses Hugging Face Datasets and Transformers, PyTorch, and PEFT to train LoRA adapters while keeping the base encoder frozen.
 
-The workflow keeps validation and test data separate, selects the best checkpoint by validation F1, and fits temperature scaling on validation logits before measuring calibrated test probabilities. Held-out evaluation covers balanced metrics, calibration and Brier decomposition, selective risk, bootstrap uncertainty, and decision-threshold diagnostics. Sample-limited runs preserve class balance, while sequence-length profiles expose how often reviews reach the truncation limit. Each run also records the effective batch size and expected optimizer schedule.
+The workflow keeps validation and test data separate, selects the best checkpoint by validation F1, and fits temperature scaling on validation logits before measuring calibrated test probabilities. Held-out evaluation covers balanced and threshold-free metrics, fixed-width and adaptive calibration, Brier decomposition, excess selective risk, bootstrap uncertainty, and decision-threshold diagnostics. Sample-limited runs preserve class balance, while sequence-length profiles expose how often reviews reach the truncation limit. Each run also records the effective batch size and expected optimizer schedule.
 
 ## Pipeline
 
 1. Load IMDb and create a seeded, stratified validation split.
 2. Tokenize reviews with truncation and dynamic padding.
 3. Add LoRA adapters to DistilBERT’s `q_lin` and `v_lin` projections.
-4. Fine-tune with `Trainer`, AdamW, gradient accumulation, and early stopping.
+4. Fine-tune with `Trainer`, AdamW, gradient accumulation, gradient clipping, optional label smoothing, and early stopping.
 5. Save the adapter, classification head, tokenizer, configuration, and parameter report.
 6. Review calibration, predictive entropy, confidence slices, selective risk, confident mistakes, and threshold trade-offs.
 
