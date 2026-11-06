@@ -323,6 +323,55 @@ def brier_decomposition(
     }
 
 
+def class_conditional_reliability(
+    labels,
+    positive_probabilities,
+    threshold: float = 0.5,
+) -> dict[str, object]:
+    """Expose asymmetric confidence and error behavior across sentiment classes."""
+
+    if not 0.0 < threshold < 1.0:
+        raise ValueError("threshold must be between 0 and 1")
+    labels, probabilities = _validated_binary_arrays(labels, positive_probabilities)
+    predictions = (probabilities >= threshold).astype(int)
+    rows = []
+    for class_value, class_name in ((0, "negative"), (1, "positive")):
+        mask = labels == class_value
+        if not np.any(mask):
+            continue
+        true_class_probability = np.where(
+            class_value == 1,
+            probabilities[mask],
+            1.0 - probabilities[mask],
+        )
+        errors = predictions[mask] != class_value
+        rows.append(
+            {
+                "class": class_name,
+                "label": class_value,
+                "count": int(mask.sum()),
+                "error_rate": float(errors.mean()),
+                "mean_true_class_probability": float(true_class_probability.mean()),
+                "mean_confidence_on_errors": (
+                    float((1.0 - true_class_probability[errors]).mean())
+                    if np.any(errors)
+                    else None
+                ),
+                "brier_score": float(
+                    np.mean((probabilities[mask] - labels[mask]) ** 2)
+                ),
+            }
+        )
+    error_rates = [float(row["error_rate"]) for row in rows]
+    brier_scores = [float(row["brier_score"]) for row in rows]
+    return {
+        "threshold": float(threshold),
+        "classes": rows,
+        "error_rate_gap": float(max(error_rates) - min(error_rates)) if rows else 0.0,
+        "brier_score_gap": float(max(brier_scores) - min(brier_scores)) if rows else 0.0,
+    }
+
+
 def confidence_slices(
     labels,
     positive_probabilities,
@@ -721,6 +770,11 @@ def evaluate_test_set(
         false_negative_cost=false_negative_cost,
     )
     calibration = calibration_report(output.label_ids, probabilities)
+    class_reliability = class_conditional_reliability(
+        output.label_ids,
+        probabilities,
+        threshold=best_threshold["threshold"],
+    )
     selective_risk = selective_risk_report(output.label_ids, probabilities)
     intervals = bootstrap_metric_intervals(
         output.label_ids,
@@ -763,6 +817,8 @@ def evaluate_test_set(
             "test_expected_calibration_error": calibration[
                 "expected_calibration_error"
             ],
+            "test_class_error_rate_gap": class_reliability["error_rate_gap"],
+            "test_class_brier_score_gap": class_reliability["brier_score_gap"],
             "test_high_confidence_error_rate": high_confidence["error_rate"],
             "test_mean_entropy_bits": uncertainty["mean_entropy_bits"],
             "test_low_margin_rate": uncertainty["low_margin_rate"],
@@ -820,6 +876,9 @@ def evaluate_test_set(
         )
     (report_dir / "calibration_report.json").write_text(
         json.dumps(calibration, indent=2) + "\n"
+    )
+    (report_dir / "class_conditional_reliability.json").write_text(
+        json.dumps(class_reliability, indent=2) + "\n"
     )
     if temperature_report is not None:
         (report_dir / "temperature_scaling.json").write_text(

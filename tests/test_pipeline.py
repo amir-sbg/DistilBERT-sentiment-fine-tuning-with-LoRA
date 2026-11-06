@@ -22,6 +22,7 @@ from fine_tuning_llms.evaluate import (
     brier_decomposition,
     bootstrap_metric_intervals,
     calibration_report,
+    class_conditional_reliability,
     classification_metrics,
     confident_error_records,
     confidence_slices,
@@ -319,6 +320,18 @@ def test_brier_decomposition_rewards_resolved_probability_groups() -> None:
     assert report["resolution"] == pytest.approx(0.25)
     assert report["reliability"] == pytest.approx(0.01)
     assert report["decomposed_brier_score"] == pytest.approx(0.01)
+
+
+def test_class_conditional_reliability_exposes_asymmetric_errors() -> None:
+    report = class_conditional_reliability(
+        labels=np.array([0, 0, 1, 1]),
+        positive_probabilities=np.array([0.10, 0.80, 0.60, 0.90]),
+    )
+    by_class = {row["class"]: row for row in report["classes"]}
+
+    assert by_class["negative"]["error_rate"] == pytest.approx(0.5)
+    assert by_class["positive"]["error_rate"] == 0.0
+    assert report["error_rate_gap"] == pytest.approx(0.5)
 
 
 def test_confidence_slices_separate_error_bands() -> None:
