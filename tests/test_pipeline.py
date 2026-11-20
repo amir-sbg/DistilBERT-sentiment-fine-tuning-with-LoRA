@@ -517,7 +517,7 @@ def test_optimization_plan_accounts_for_gradient_accumulation() -> None:
 
 def test_training_regularization_is_validated_and_forwarded() -> None:
     config = FineTuneConfig(label_smoothing_factor=0.1, max_grad_norm=0.5)
-    arguments = build_training_arguments(config)
+    arguments = build_training_arguments(config, train_examples=32)
 
     assert arguments.label_smoothing_factor == 0.1
     assert arguments.max_grad_norm == 0.5

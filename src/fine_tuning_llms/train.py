@@ -52,7 +52,7 @@ def optimization_plan(
     }
 
 
-def build_training_arguments(config: FineTuneConfig) -> TrainingArguments:
+def build_training_arguments(config: FineTuneConfig, train_examples: int | None = None) -> TrainingArguments:
     arguments = {
         "output_dir": str(config.output_dir),
         "learning_rate": config.learning_rate,
@@ -63,7 +63,6 @@ def build_training_arguments(config: FineTuneConfig) -> TrainingArguments:
         "weight_decay": config.weight_decay,
         "label_smoothing_factor": config.label_smoothing_factor,
         "max_grad_norm": config.max_grad_norm,
-        "warmup_ratio": config.warmup_ratio,
         "save_strategy": "epoch",
         "logging_strategy": "steps",
         "logging_steps": 25,
@@ -77,9 +76,16 @@ def build_training_arguments(config: FineTuneConfig) -> TrainingArguments:
         "seed": config.seed,
         "data_seed": config.seed,
     }
+    supported = signature(TrainingArguments).parameters
+    if "warmup_ratio" in supported:
+        arguments["warmup_ratio"] = config.warmup_ratio
+    else:
+        if train_examples is None:
+            raise ValueError("train_examples is required to preserve warmup with this Transformers version")
+        arguments["warmup_steps"] = optimization_plan(train_examples, config)["warmup_steps"]
     strategy_parameter = (
         "eval_strategy"
-        if "eval_strategy" in signature(TrainingArguments).parameters
+        if "eval_strategy" in supported
         else "evaluation_strategy"
     )
     arguments[strategy_parameter] = "epoch"
@@ -95,7 +101,7 @@ def fine_tune(
 ) -> Trainer:
     trainer_arguments = {
         "model": model,
-        "args": build_training_arguments(config),
+        "args": build_training_arguments(config, train_examples=len(dataset["train"])),
         "train_dataset": dataset["train"],
         "eval_dataset": dataset["validation"],
         "data_collator": DataCollatorWithPadding(tokenizer=tokenizer),
