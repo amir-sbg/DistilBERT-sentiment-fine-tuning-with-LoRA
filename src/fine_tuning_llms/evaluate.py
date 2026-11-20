@@ -133,7 +133,7 @@ def _validated_logit_labels(labels, logits: np.ndarray) -> np.ndarray:
     return values
 
 
-def classification_metrics(prediction: EvalPrediction) -> dict[str, float]:
+def classification_metrics(prediction: EvalPrediction) -> dict[str, float | None]:
     logits = _logits_array(prediction.predictions)
     labels = np.asarray(prediction.label_ids)
     if labels.ndim != 1 or labels.shape[0] != logits.shape[0]:
@@ -153,8 +153,8 @@ def classification_metrics(prediction: EvalPrediction) -> dict[str, float]:
         "recall": float(recall_score(labels, predicted_labels, zero_division=0)),
         "f1": float(f1_score(labels, predicted_labels, zero_division=0)),
         "matthews_correlation": float(matthews_corrcoef(labels, predicted_labels)),
-        "roc_auc": float(roc_auc_score(labels, positive_probabilities)),
-        "average_precision": float(average_precision_score(labels, positive_probabilities)),
+        "roc_auc": float(roc_auc_score(labels, positive_probabilities)) if len(np.unique(labels)) == 2 else None,
+        "average_precision": float(average_precision_score(labels, positive_probabilities)) if len(np.unique(labels)) == 2 else None,
         "log_loss": float(
             log_loss(labels, positive_probabilities, labels=[0, 1])
         ),

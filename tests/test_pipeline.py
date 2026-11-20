@@ -200,6 +200,13 @@ def test_classification_metrics_reject_non_binary_logits() -> None:
         )
 
 
+def test_single_class_slice_has_no_discrimination_auc() -> None:
+    prediction = EvalPrediction(predictions=np.array([[2.0, 1.0], [3.0, 0.0]]), label_ids=np.array([0, 0]))
+    metrics = classification_metrics(prediction)
+    assert metrics["roc_auc"] is None
+    assert metrics["average_precision"] is None
+
+
 def test_threshold_sweep_reports_decision_tradeoffs() -> None:
     rows = threshold_sweep(
         labels=np.array([0, 1, 1, 0]),
